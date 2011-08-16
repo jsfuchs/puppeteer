@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<!--
+ Copyright 2011 Google Inc. All Rights Reserved.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+
+-->
+<html>
+<head>
+<title>logging_test.html</title>
+<script src="../../../javascript/closure/base.js"></script>
+<script src="../puppet.js"></script>
+<script type="text/javascript">
+  goog.require('goog.testing.jsunit');
+</script>
+</head>
+<body></body>
+
+<script type="text/javascript">
+function testIdXpath() {
+  var xpath = xid();
+  assertEquals('//*[@id]', xpath);
+}
+
+function testIdWithValueXpath() {
+  var xpath = xid('He-Man');
+  assertEquals('//*[@id="He-Man"]', xpath);
+}
+
+function testIdWithContextXpath() {
+  var xpath = xid(null, '//dd');
+  assertEquals('//dd[@id]', xpath);
+}
+
+function testTextWithContextXpath() {
+  var xpath = xtext('Zodiac', '/table//tr/td');
+  assertEquals('/table//tr/td[text()="Zodiac"]', xpath);
+}
+
+function testClassWithEmptyStringValue() {
+  var xpath = xclass('');
+  assertEquals('//*[@class=""]', xpath);
+}
+
+function testContainsClassXpath() {
+  var xpath = xclass.c('Skeletor');
+  assertEquals('//*[contains(@class,"Skeletor")]', xpath);
+}
+
+function testContainsNameWithContextXpath() {
+  var xpath = xname.c('Beast Man', '/ol//li');
+  assertEquals('/ol//li[contains(@name,"Beast Man")]', xpath);
+}
+
+function testCaseInsensitiveTitleXpath() {
+  var xpath = xtitle.i('She-Ra');
+  assertEquals('//*[translate(@title,"ABCDEFGHIJKLMNOPQRSTUVWXYZ",' +
+               '"abcdefghijklmnopqrstuvwxyz")=translate("She-Ra",' +
+               '"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz")]',
+               xpath);
+}
+
+function testCaseInsensitiveStyleWithContextXpath() {
+  var xpath = xstyle.i('Mer-Man', '//input');
+  assertEquals('//input[translate(@style,"ABCDEFGHIJKLMNOPQRSTUVWXYZ",' +
+               '"abcdefghijklmnopqrstuvwxyz")=translate("Mer-Man",' +
+               '"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz")]',
+               xpath);
+}
+
+function testContainsCaseInsensitiveHrefXpath() {
+  var xpath = xhref.ic('Man-At-Arms/Teela');
+  assertEquals('//*[contains(translate(@href,"ABCDEFGHIJKLMNOPQRSTUVWXYZ",' +
+               '"abcdefghijklmnopqrstuvwxyz"),translate("Man-At-Arms/Teela",' +
+               '"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"))]',
+               xpath);
+}
+
+function testContainsCaseInsensitiveTypeWithContextXpath() {
+  var xpath = xtype.ic('Tri-Klops', '//script');
+  assertEquals('//script[contains(translate(@type,"ABCDEFGHIJKLMNOPQRSTUVWXYZ' +
+               '","abcdefghijklmnopqrstuvwxyz"),translate("Tri-Klops",' +
+               '"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"))]',
+               xpath);
+}
+
+function testNotIdXpath() {
+  var xpath = xid.n();
+  assertEquals('//*[not(@id)]', xpath);
+}
+
+function testNotClassWithValueXpath() {
+  var xpath = xclass.n('Lion-O');
+  assertEquals('//*[not(@class="Lion-O")]', xpath);
+}
+
+function testNotNameWithNullAndContextXpath() {
+  var xpath = xname.n(null, '//div');
+  assertEquals('//div[not(@name)]', xpath);
+}
+
+function testNotTitleWithUndefinedAndContextXpath() {
+  var xpath = xtitle.n(undefined, '/body');
+  assertEquals('/body[not(@title)]', xpath);
+}
+
+function testNotHrefWithEmptyStringAndContextXpath() {
+  var xpath = xhref.n('', '//a');
+  assertEquals('//a[not(@href="")]', xpath);
+}
+
+function testNotValueWithValueAndContextXpath() {
+  var xpath = xvalue.n('Jaga', '//textarea');
+  assertEquals('//textarea[not(@value="Jaga")]', xpath);
+}
+
+function testNotContainsSrcXpath() {
+  var xpath = xsrc.nc('Tygra');
+  assertEquals('//*[not(contains(@src,"Tygra"))]', xpath);
+}
+
+function testNotContainsTextWithContextXpath() {
+  var xpath = xtext.nc('Panthro', '//ul');
+  assertEquals('//ul[not(contains(text(),"Panthro"))]', xpath);
+}
+
+function testNotCaseInsensitiveClassWithValueXpath() {
+  var xpath = xclass.ni('Cheetara');
+  assertEquals('//*[not(translate(@class,"ABCDEFGHIJKLMNOPQRSTUVWXYZ",' +
+               '"abcdefghijklmnopqrstuvwxyz")=translate("Cheetara",' +
+               '"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"))]',
+               xpath);
+}
+
+function testNotCaseInsensitiveTitleWithValueAndContextXpath() {
+  var xpath = xtitle.ni('Pumyra', '//blockquote');
+  assertEquals('//blockquote[not(translate(@title,"ABCDEFGHIJKLMNOPQRSTUVWXYZ' +
+               '","abcdefghijklmnopqrstuvwxyz")=translate("Pumyra",' +
+               '"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"))]',
+               xpath);
+}
+
+function testNotCaseInsensitiveContainsHrefXpath() {
+  var xpath = xhref.nic('Mumm-Ra');
+  assertEquals('//*[not(contains(translate(@href,"ABCDEFGHIJKLMNOPQRSTUVWXYZ"' +
+               ',"abcdefghijklmnopqrstuvwxyz"),translate("Mumm-Ra",' +
+               '"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz")))]',
+               xpath);
+}
+
+function testNotContainsCaseInsensitiveStyleWithContextXpath() {
+  var xpath = xstyle.nic('Zaxx', '//code');
+  assertEquals('//code[not(contains(translate(@style,"ABCDEFGHIJKLMNOPQRSTUVW' +
+               'XYZ","abcdefghijklmnopqrstuvwxyz"),translate("Zaxx",' +
+               '"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz")))]',
+               xpath);
+}
+
+function testCurrentStackTrace() {
+  var stack = puppet.currentStackTrace_();
+  // Some browsers (notably, IE and Safari) don't provide a stack trace, in
+  // which case the return value should be the empty string.
+  if (stack.length == 0) {
+    return;
+  }
+
+  var calls = stack.split('\n');
+  assertTrue(
+      'Expected "puppet_test.html" in the first line of the stack trace: ' +
+          stack,
+      calls[0].indexOf('puppet_test.html') >= 0);
+}
+
+</script>
+</html>

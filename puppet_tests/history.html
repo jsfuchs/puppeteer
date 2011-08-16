@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<!-- 
+ Copyright 2011 Google Inc. All Rights Reserved.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+
+-->
+
+<script src="../puppet.js"></script>
+
+
+<script>
+/**
+ * Test the history commands and how they interact with load.
+ */
+window.onload = function() {
+  // Load the first history page and check an element.
+  run(load, 'history_page1.htm');
+  run(shown, id('div1'));
+
+  // Load the second history page and check an element.
+  run(load, 'history_page2.htm');
+  run(shown, id('div2'));
+
+  // Changing only the hash still forces a page load.
+  run(load, 'history_page2.htm#a');
+  run(shown, id('div2'));
+  run(function() {
+    return puppet.location().hash == '#a';
+  });
+
+  // Step back to no hash.
+  run(back);
+  run(shown, id('div2'));
+  run(function() {
+    return puppet.location().hash != '#a';
+  });
+
+  // Step back to first page.
+  run(load(back));
+  run(shown, id('div1'));
+
+  // Step forward to second page.
+  run(load(forward));
+  run(shown, id('div2'));
+  run(function() {
+    return puppet.location().hash != '#a';
+  });
+
+  // Step forward to hash.
+  run(forward);
+  run(shown, id('div2'));
+  run(function() {
+    return puppet.location().hash == '#a';
+  });
+};
+</script>

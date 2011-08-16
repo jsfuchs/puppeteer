@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<!-- 
+ Copyright 2011 Google Inc. All Rights Reserved.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+
+-->
+
+<script src="../puppet.js"></script>
+
+<script>
+/**
+ * Test that an idle page doesn't receive mousemove events.
+ */
+window.onload = function() {
+  function failListener(e) {
+    assert(false, 'event type: ' + e.type);
+  }
+  var mouseMoveEvents = ['mousemove', 'mouseover', 'mouseout',
+                         'mouseenter', 'mouseleave', 'touchmove'];
+  var div;
+
+  // Make a large div where the mouse will land if it's in the browser window.
+  // Listen for 5 seconds and fail immediately if any mouse events occur.
+  run(function() {
+    div = puppet.document().createElement('DIV');
+    div.style.height = '800px';
+    div.style.width = '100%';
+    goog.events.listen(div, mouseMoveEvents, failListener);
+    puppet.document().body.appendChild(div);
+  });
+  run(sleep, 5);
+
+  // No mouse events by now so no longer fail immediately.
+  run(function() {
+    goog.events.unlisten(div, mouseMoveEvents, failListener);
+  });
+
+  // Deliberately synthetic mouse events should be heard.
+  var mouseMoved = false;
+  run(function() {
+    goog.events.listen(div, mouseMoveEvents, function(e) {
+      mouseMoved = true;
+    });
+    mouse(div, 'mousemove');
+  });
+  run(function() {
+    return mouseMoved;
+  });
+};
+</script>

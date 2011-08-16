@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<!--
+ Copyright 2011 Google Inc. All Rights Reserved.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+
+ 
+-->
+<html>
+<head>
+<title>xpath_test.html</title>
+<script src="../../../javascript/closure/base.js"></script>
+<script src="../puppet.js"></script>
+<script type="text/javascript">
+  goog.require('goog.testing.jsunit');
+</script>
+<body></body>
+
+<script type="text/javascript">
+function setUpPage() {
+  // Generate the initial html page for testing.
+  // <html><body>
+  // <div id="div1"></div>
+  // <iframe id="iframe1">
+  //   <div id="div2">
+  //   <iframe id="iframe2">
+  //     <div id="div3"></div>
+  //   </iframe>
+  // </iframe>
+  // <iframe id="iframe3">
+  // </body></html>
+  createElement(document, 'DIV', 'div1');
+  var iframe1Doc = createElement(document, 'IFRAME', 'iframe1');
+  createElement(iframe1Doc, 'DIV', 'div2');
+  var iframe2Doc = createElement(iframe1Doc, 'IFRAME', 'iframe2');
+  createElement(iframe2Doc, 'DIV', 'div3');
+  createElement(document, 'IFRAME', 'iframe3');
+}
+
+/**
+ * Create an element in the given document of the given tagName with
+ * the given id. If its an iframe element, return the iframe document.
+ */
+function createElement(doc, tagName, id) {
+  var elem = doc.createElement(tagName);
+  elem.id = id;
+  doc.body.appendChild(elem);
+
+  if (tagName == 'IFRAME') {
+    var iframeDoc = goog.dom.getFrameContentDocument(elem);
+    if (!iframeDoc.body) {
+      iframeDoc.appendChild(iframeDoc.createElement('BODY'));
+    }
+    return iframeDoc;
+  }
+}
+
+function testXpathQuote() {
+  var str = 'foo';
+  var res = puppet.xpath.quote(str);
+  assertEquals('"foo"', res);
+
+  str = 'foo\'bar';
+  res = puppet.xpath.quote(str);
+  assertEquals('"foo\'bar"', res);
+
+  str = 'foo"bar';
+  res = puppet.xpath.quote(str);
+  assertEquals('\'foo"bar\'', res);
+
+  str = 'foo"bar\'';
+  res = puppet.xpath.quote(str);
+  assertEquals('concat("foo", \'"\', "bar\'")', res);
+}
+
+function testXpathLowerCase() {
+  var str = 'foo';
+  var res = puppet.xpath.lowerCase(str);
+  assertEquals(
+    'translate(foo,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz")',
+    res);
+}
+
+function assertXPathResolvesTo(path, ids) {
+  var iter = puppet.xpath.resolveXPath(path, window);
+  for (var i = 0; i < ids.length; i++) {
+    assertEquals(ids[i], iter.iterateNext().id);
+  }
+  assertEvaluatesToFalse(iter.iterateNext());
+}
+
+function testInvalidXpathResolve() {
+  var path = 'id("invalid")';
+  assertXPathResolvesTo(path, []);
+}
+
+function testSingleXpathResolve() {
+  var path = 'id("div1")';
+  assertXPathResolvesTo(path, ['div1']);
+}
+
+function testMultiXpathResolve() {
+  var path = 'id("div1")|id("iframe1")';
+  assertXPathResolvesTo(path, ['div1', 'iframe1']);
+}
+
+function testIframeContentXpathResolve() {
+  var path = 'id("iframe1")/content:id("div2")';
+  assertXPathResolvesTo(path, ['div2']);
+}
+
+function testIframeWithinIframeXpathResolve() {
+  var path = 'id("iframe1")/content:id("iframe2")/content:id("div3")';
+  assertXPathResolvesTo(path, ['div3']);
+}
+
+function testMultiIframeContentXPathResolveThrowsException() {
+  var path = '//iframe/content:id("div1")';
+  assertThrows(goog.partial(puppet.xpath.resolveXPath, path, window));
+}
+</script>
+</html>
