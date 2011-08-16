@@ -46202,7 +46202,6 @@ var pinch = puppet.command(true, function(elem, desc, x1, y1, x2, y2, dx, dy) {
   }
 });
 
-// Testing MOE auto. Should push this line to public code base
 // Don't set up Puppet if we are in a testing environment.
 if (!puppet['runner']) {
   puppet.setup_();

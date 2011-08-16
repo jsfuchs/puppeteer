@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /**
- * @fileoverview Puppet: a web-application testing framework.
+ * @fileoverview Web Puppeteer: a web-application testing framework.
  *
  */
 
