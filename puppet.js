@@ -144,4 +144,4 @@ var __BOOTSTRAP_ = {
 window.CLOSURE_NO_DEPS = true;
 
 // With __include bootstrapped, include Puppet modules.
-__BOOTSTRAP_.include('modules-bundle.js');
+__BOOTSTRAP_.include('modules.js');
