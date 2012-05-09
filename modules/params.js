@@ -185,13 +185,14 @@ puppet.params.setUrlParam = function(name, value, opt_url) {
 
   // NOTE(user): A bit of a hack. We modify and set the encoded query
   // directly to compensate for goog.Uri incorrectly encoding the slash, colon,
-  // and question mark in its toString method, and to undo the encoding of
-  // percent, because we don't want deliberate encodings re-encoded. See
+  // comma, and question mark in its toString method, and to undo the encoding
+  // of percent, because we don't want deliberate encodings re-encoded. See
   // params_test.js for the unit tests keeping this implementation in check.
   var uri = new goog.Uri(url.replace(/%25/g, '%2525'));
   var query = uri.setParameterValue(name, value).getEncodedQuery();
   query = query.replace(/%2F/g, '/').replace(/%3F/g, '?');
   query = query.replace(/%3A/g, ':').replace(/%25/g, '%');
+  query = query.replace(/%2C/g, ',');
   uri.setQuery(query, true);
 
   return uri.toString();

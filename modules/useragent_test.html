@@ -55,6 +55,7 @@ function testOpera() {
   assertProduct(ua, 'Opera');
   assertEquals(false, puppet.userAgent.isOpera(9));
   assertEquals(true, puppet.userAgent.isOpera('10.1'));
+  assertEquals(false, puppet.userAgent.isOpera('10.0'));
   assertEquals(false, puppet.userAgent.isOpera(11));
   assertEquals(true, puppet.userAgent.isOpera(9, 10.5));
 }
@@ -63,13 +64,14 @@ function testFirefox() {
   var ua = 'Mozilla/6.0 (Macintosh; U; PPC Mac OS X Mach-O; en-US; ' +
            'rv:2.0.0.0) Gecko/20061028 Firefox/3.0';
   assertProduct(ua, 'Firefox');
-  assertEquals(false, puppet.userAgent.isFirefox(2));
+  assertEquals(false, puppet.userAgent.isFirefox(1));
   assertEquals(true, puppet.userAgent.isFirefox('3.0'));
   assertEquals(false, puppet.userAgent.isFirefox('3.5.3'));
 
   ua = 'Mozilla/5.0 (Macintosh; U; PPC Mac OS X Mach-O; en-US; ' +
        'rv:1.8.1.4) Gecko/20070515 Firefox/2.0.4';
   assertProduct(ua, 'Firefox');
+  assertEquals(true, puppet.userAgent.isFirefox('2'));
   assertEquals(true, puppet.userAgent.isFirefox(2, null));
   assertEquals(true, puppet.userAgent.isFirefox('2.0.4'));
   assertEquals(false, puppet.userAgent.isFirefox(3));
@@ -99,8 +101,8 @@ function testChrome() {
   assertProduct(ua, 'Chrome');
   assertEquals(true, puppet.userAgent.isChrome('0.2.153'));
   assertEquals(false, puppet.userAgent.isChrome(1));
-  assertEquals(true, puppet.userAgent.isWebkit('525.19'));
-  assertEquals(false, puppet.userAgent.isWebkit('525.2'));
+  assertEquals(true, puppet.userAgent.isWebKit('525.19'));
+  assertEquals(false, puppet.userAgent.isWebKit('525.2'));
 
   ua = 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US) ' +
        'AppleWebKit/532.3 (KHTML, like Gecko) Chrome/4.0.223.11 ' +
@@ -110,8 +112,8 @@ function testChrome() {
   assertEquals(false, puppet.userAgent.isChrome('0.2.153'));
   assertEquals(false, puppet.userAgent.isChrome('4.1.223.13'));
   assertEquals(true, puppet.userAgent.isChrome('4.0.223.11'));
-  assertEquals(true, puppet.userAgent.isWebkit(532.3));
-  assertEquals(false, puppet.userAgent.isWebkit(532.4));
+  assertEquals(true, puppet.userAgent.isWebKit(532.3));
+  assertEquals(false, puppet.userAgent.isWebKit(532.4));
 }
 
 function testSafari() {
@@ -123,8 +125,8 @@ function testSafari() {
   assertEquals(true, puppet.userAgent.isSafari('5.0.3'));
   assertEquals(false, puppet.userAgent.isSafari('5.0.4'));
   assertEquals(false, puppet.userAgent.isSafari(503));
-  assertEquals(true, puppet.userAgent.isWebkit('534', '535'));
-  assertEquals(false, puppet.userAgent.isWebkit('535', null));
+  assertEquals(true, puppet.userAgent.isWebKit('534', '535'));
+  assertEquals(false, puppet.userAgent.isWebKit('535', null));
 
   ua = 'Mozilla/5.0 (Windows; U; Windows NT 6.0; pl-PL) ' +
        'AppleWebKit/525.19 (KHTML, like Gecko) Version/3.1.2 Safari/525.21';
@@ -132,7 +134,7 @@ function testSafari() {
   assertEquals(true, puppet.userAgent.isSafari(3, 3.99));
   assertEquals(true, puppet.userAgent.isSafari('3.0', '3.2'));
   assertEquals(true, puppet.userAgent.isSafari('3.1.2'));
-  assertEquals(true, puppet.userAgent.isWebkit('525.19'));
+  assertEquals(true, puppet.userAgent.isWebKit('525.19'));
 
   ua = 'Mozilla/5.0 (Macintosh; U; PPC Mac OS X 10_5_3; en-us) ' +
        'AppleWebKit/525.18 (KHTML, like Gecko) Version/3.1.1 Safari/525.20';
@@ -141,7 +143,7 @@ function testSafari() {
   assertEquals(true, puppet.userAgent.isSafari('3.1.1'));
   assertEquals(false, puppet.userAgent.isSafari('3.1.2'));
   assertEquals(false, puppet.userAgent.isSafari('525.21'));
-  assertEquals(true, puppet.userAgent.isWebkit('525.18'));
+  assertEquals(true, puppet.userAgent.isWebKit('525.18'));
 
   // Safari 1 and 2 do not report product version numbers in their
   // user-agent strings. VERSION for these browsers will be set to ''.
@@ -154,9 +156,9 @@ function testSafari() {
   assertEquals(false, puppet.userAgent.isSafari(3));
   assertEquals(true, puppet.userAgent.isSafari(0));
   assertEquals(true, puppet.userAgent.isSafari('0'));
-  assertEquals(true, puppet.userAgent.isSafari(''));
+  assertEquals(true, puppet.userAgent.isSafari());
   assertEquals(false, puppet.userAgent.isSafari('3.1.1'));
-  assertEquals(true, puppet.userAgent.isWebkit('418.9.1'));
+  assertEquals(true, puppet.userAgent.isWebKit('418.9.1'));
 }
 
 function testIPhone() {
@@ -169,19 +171,20 @@ function testIPhone() {
   assertEquals(false, puppet.userAgent.isIPhone('3.1.1A543a'));
   assertEquals(false, puppet.userAgent.isIPhone('3.1.1A320c', null));
   assertEquals(false, puppet.userAgent.isIPhone('3.0.3A100a'));
-  assertEquals(true, puppet.userAgent.isWebkit('420+'));
-  assertEquals(true, puppet.userAgent.isMobileWebkit('420+'));
-  assertEquals(true, puppet.userAgent.isMobileWebkit('420+', null));
-  assertEquals(false, puppet.userAgent.isMobileWebkit(421, 422));
+  assertEquals(true, puppet.userAgent.isWebKit('420+'));
+  assertEquals(true, puppet.userAgent.isMobileWebKit('420+'));
+  assertEquals(true, puppet.userAgent.isMobileWebKit('420+', null));
+  assertEquals(false, puppet.userAgent.isMobileWebKit(421, 422));
+  assertEquals(false, puppet.userAgent.isAndroidMobile());
 
   ua = 'Mozilla/5.0 (iPod; U; CPU like Mac OS X; en) AppleWebKit/420.1 ' +
        '(KHTML, like Gecko) Version/3.0 Mobile/3A100a Safari/419.3';
   assertProduct(ua, 'IPhone');
   assertEquals(true, puppet.userAgent.isIPhone('3.0.3A100a'));
   assertEquals(true, puppet.userAgent.isIPhone('3.0.1A543a', 4));
-  assertEquals(true, puppet.userAgent.isWebkit('420.1'));
-  assertEquals(true, puppet.userAgent.isMobileWebkit('420.1'));
-  assertEquals(false, puppet.userAgent.isMobileWebkit('420'));
+  assertEquals(true, puppet.userAgent.isWebKit('420.1'));
+  assertEquals(true, puppet.userAgent.isMobileWebKit('420.1'));
+  assertEquals(true, puppet.userAgent.isMobileWebKit('420'));
 }
 
 function testIPad() {
@@ -195,8 +198,8 @@ function testIPad() {
   assertEquals(false, puppet.userAgent.isIPad('4.1.4.7B334b'));
   assertEquals(true, puppet.userAgent.isIPad('4.0.4.7B320c', null));
   assertEquals(false, puppet.userAgent.isIPad('4.0.4.8B334b'));
-  assertEquals(true, puppet.userAgent.isWebkit('531.21.10'));
-  assertEquals(true, puppet.userAgent.isMobileWebkit('531.21.10'));
+  assertEquals(true, puppet.userAgent.isWebKit('531.21.10'));
+  assertEquals(true, puppet.userAgent.isMobileWebKit('531.21.10'));
 }
 
 function testAndroid() {
@@ -204,20 +207,30 @@ function testAndroid() {
            '(KHTML, like Gecko) Safari/419.3';
   assertProduct(ua, 'Android');
   assertEquals(true, puppet.userAgent.isAndroid(0.5));
-  assertEquals(false, puppet.userAgent.isAndroid('1.0'));
-  assertEquals(true, puppet.userAgent.isWebkit('522+'));
-  assertEquals(false, puppet.userAgent.isMobileWebkit('522+'));
+  assertEquals(true, puppet.userAgent.isAndroid(0.5, 1));
+  assertEquals(true, puppet.userAgent.isAndroid(0.5, null));
+  assertEquals(false, puppet.userAgent.isAndroid(1, 2));
+  assertEquals(true, puppet.userAgent.isWebKit('522+'));
+  assertEquals(false, puppet.userAgent.isMobileWebKit('522+'));
+  assertEquals(false, puppet.userAgent.isAndroidMobile());
+  assertEquals(true, puppet.userAgent.isAndroidTablet());
+  assertEquals(true, puppet.userAgent.isAndroidTablet(0.5));
 
   ua = 'Mozilla/5.0 (Linux; U; Android 1.0; en-us; dream) ' +
        'AppleWebKit/525.10+ (KHTML, like Gecko) Version/3.0.4 Mobile ' +
        'Safari/523.12.2';
   assertProduct(ua, 'Android');
   assertEquals(true, puppet.userAgent.isAndroid(0.5, null));
-  assertEquals(true, puppet.userAgent.isAndroid(3, 4));
-  assertEquals(true, puppet.userAgent.isAndroid('3.0.4'));
+  assertEquals(false, puppet.userAgent.isAndroid(3, 4));
+  assertEquals(false, puppet.userAgent.isAndroid('3.0.4'));
   assertEquals(false, puppet.userAgent.isAndroid('3.0.12'));
-  assertEquals(true, puppet.userAgent.isWebkit('525.10+'));
-  assertEquals(true, puppet.userAgent.isMobileWebkit('525.10+'));
+  assertEquals(true, puppet.userAgent.isAndroid('1'));
+  assertEquals(true, puppet.userAgent.isWebKit('525.10+'));
+  assertEquals(true, puppet.userAgent.isMobileWebKit('525.10+'));
+  assertEquals(true, puppet.userAgent.isAndroidMobile());
+  assertEquals(true, puppet.userAgent.isAndroidMobile(1, 2));
+  assertEquals(false, puppet.userAgent.isAndroidMobile(3, null));
+  assertEquals(false, puppet.userAgent.isAndroidTablet());
 }
 
 function testWindows() {
@@ -239,15 +252,17 @@ function testWindows() {
   assertPlatform(xp, 'Windows');
   assertEquals(true, puppet.userAgent.isWindows('5.1'));
   assertEquals(true, puppet.userAgent.isWindows('5.1', null));
-  assertEquals(false, puppet.userAgent.isWindows(5));
+  assertEquals(true, puppet.userAgent.isWindows(5));
+  assertEquals(false, puppet.userAgent.isWindows(5.11));
 
   assertPlatform(vista, 'Windows');
   assertEquals(true, puppet.userAgent.isWindows('6.0'));
-  assertEquals(true, puppet.userAgent.isWindows(null, 7));
+  assertEquals(true, puppet.userAgent.isWindows(0, 7));
 
   assertPlatform(win7, 'Windows');
   assertEquals(true, puppet.userAgent.isWindows('6.1'));
-  assertEquals(false, puppet.userAgent.isWindows(6));
+  assertEquals(true, puppet.userAgent.isWindows(6));
+  assertEquals(false, puppet.userAgent.isWindows(6.2));
 }
 
 function testMac() {
@@ -283,6 +298,12 @@ function testBlackberry() {
            'AppleWebKit/534.1+ (KHTML, like Gecko) Version/6.0.0.246 ' +
            ' Mobile Safari/534.1+';
   assertPlatform(ua, 'Blackberry');
+}
+
+function testPlaybook() {
+  var ua = 'Mozilla/5.0 (PlayBook; U; RIM Tablet OS 1.0.0; en-US) ' +
+           'AppleWebKit/534.11+';
+  assertPlatform(ua, 'PlayBook');
 }
 
 function testDolfin() {
@@ -378,7 +399,7 @@ function testGecko() {
   assertEquals(true, puppet.userAgent.isGecko('1.8'));
 }
 
-function testIeEngine() {
+function testIEEngine() {
   assertEngine('Mozilla/4.0 (compatible; MSIE 5.01; Windows NT 5.0)', 'IE');
   assertEquals(true, puppet.userAgent.isIE('5.01'));
 
@@ -471,8 +492,8 @@ function assertEngine(ua, engine) {
   puppet.userAgent.init_(ua);
   assertEquals(engine == 'IE', puppet.userAgent.isIE());
   assertEquals(engine == 'Gecko', puppet.userAgent.isGecko());
-  assertEquals(engine == 'Webkit', puppet.userAgent.isWebkit());
-  assertEquals(engine == 'MobileWebkit', puppet.userAgent.isMobileWebkit());
+  assertEquals(engine == 'WebKit', puppet.userAgent.isWebKit());
+  assertEquals(engine == 'MobileWebKit', puppet.userAgent.isMobileWebKit());
   assertEquals(engine == 'Opera', puppet.userAgent.isOpera());
 }
 

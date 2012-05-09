@@ -143,5 +143,11 @@ var __BOOTSTRAP_ = {
  */
 window.CLOSURE_NO_DEPS = true;
 
-// With __include bootstrapped, include Puppet modules.
-__BOOTSTRAP_.include('modules.js');
+// Include the Puppet modules binary.
+var binaryMatch = /binary=([^&]*)/.exec(window.location.search);
+var binaryPath = binaryMatch ? binaryMatch[1] : 'modules.js';
+var binaryIncludeSuccess = __BOOTSTRAP_.include(binaryPath);
+if (!binaryIncludeSuccess) {
+  // TODO(user): Implement a better bootstrapping error.
+  throw 'Modules binary could not be found at ' + binaryPath;
+}

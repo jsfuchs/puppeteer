@@ -1,7 +1,5 @@
-<!DOCTYPE html>
+<!-- Copyright 2011 Google Inc. All Rights Reserved. -->
 <!--
- Copyright 2011 Google Inc. All Rights Reserved.
-
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
  You may obtain a copy of the License at
@@ -13,22 +11,23 @@
  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  See the License for the specific language governing permissions and
  limitations under the License.
-
 -->
-<html>
-<head>
-<title>logging_test.html</title>
-<script src="../../../javascript/closure/base.js"></script>
-<script type="text/javascript">
-  goog.require('goog.testing.jsunit');
-</script>
-<script src="../puppet.js"></script>
-</head>
-<body></body>
 
-<script type="text/javascript">
-function testName() {
-  assertContains('modules/puppet_test.html', puppet.name());
-}
+<script src=../puppet.js></script>
+<script src=../google.js></script>
+<script src=test_utils.js></script>
+<script>
+/**
+ * Test page loading.
+ */
+window.onload = function() {
+  // Test a successful page load.
+  run(load, 'load_page.htm');
+
+  // Test an unsuccessful page load when the client calls puppet.initWindow.
+  // This can only be caught if the browser supports window.onerror.
+  if (SUPPORTS_WINDOW_ONERROR) {
+    run(openAndExpectFail, 'load_fail.htm');
+  }
+};
 </script>
-</html>

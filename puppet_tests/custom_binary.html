@@ -1,7 +1,5 @@
-<!DOCTYPE html>
+<!-- Copyright 2011 Google Inc. All Rights Reserved. -->
 <!--
- Copyright 2011 Google Inc. All Rights Reserved.
-
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
  You may obtain a copy of the License at
@@ -13,22 +11,18 @@
  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  See the License for the specific language governing permissions and
  limitations under the License.
-
 -->
-<html>
-<head>
-<title>logging_test.html</title>
-<script src="../../../javascript/closure/base.js"></script>
-<script type="text/javascript">
-  goog.require('goog.testing.jsunit');
-</script>
-<script src="../puppet.js"></script>
-</head>
-<body></body>
 
-<script type="text/javascript">
-function testName() {
-  assertContains('modules/puppet_test.html', puppet.name());
-}
+<script src=../puppet.js></script>
+<script src=../google.js></script>
+<script>
+/**
+ * Tests that the puppet_test_suite deps are available.
+ */
+window.onload = function() {
+  // A dependency on this module is included in the BUILD file.
+  run(function() {
+    new goog.date.DateRange();
+  });
+};
 </script>
-</html>

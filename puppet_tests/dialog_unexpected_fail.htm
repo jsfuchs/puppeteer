@@ -1,0 +1,19 @@
+<script src=../puppet.js></script>
+<script>
+/**
+ * This test is loaded dynamically by dialog.html and is expected to fail.
+ */
+window.onload = function() {
+  var dialogType = puppet.params.getUrlParam('dialog');
+  run(function() {
+    var win = puppet.window();
+    var dialogFn = win[dialogType];
+    if (dialogFn) {
+      dialogFn.call(win, 'foo');
+    } else {
+      // This test will pass, so the opening test fails.
+      puppet.echo('No valid dialog type provided');
+    }
+  });
+};
+</script>

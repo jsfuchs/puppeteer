@@ -1,0 +1,68 @@
+<!-- Copyright 2011 Google Inc. All Rights Reserved. -->
+<!--
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+<script src=../puppet.js></script>
+<script src=../google.js></script>
+<script>
+var INITIAL_SID = 'FAKE SID';
+var INITIAL_HSID = 'FAKE HSID';
+var INITIAL_LSID = 'FAKE LSID';
+var INITIAL_SSID = 'FAKE SSID';
+/**
+ * Test the GAIA login/logout functionality.
+ */
+window.onload = function() {
+  // Start test from a fake state.
+  run(function() {
+    puppet.goog.setCookie('SID', INITIAL_SID);
+    puppet.goog.setCookie('HSID', INITIAL_HSID);
+    puppet.goog.setCookie('LSID', INITIAL_LSID);
+    puppet.goog.setCookie('SSID', INITIAL_SSID);
+  });
+
+  // Test that Puppet can login and sets cookies.
+  var sid;
+  var hsid;
+  var lsid;
+  var ssid;
+  run(puppet.goog.login);
+  run(function() {
+    sid = puppet.goog.getCookie('SID');
+    hsid = puppet.goog.getCookie('HSID');
+    lsid = puppet.goog.getCookie('LSID');
+    ssid = puppet.goog.getCookie('SSID');
+    assert(INITIAL_SID != sid && sid);
+    assert(INITIAL_HSID != hsid && hsid);
+    assert(INITIAL_LSID != lsid && lsid);
+    assert(INITIAL_SSID != ssid && ssid);
+  });
+
+  run(puppet.goog.multiLogin);
+  run(function() {
+    assert(sid != puppet.goog.getCookie('SID'));
+    assert(lsid != puppet.goog.getCookie('LSID'));
+    assert(hsid != puppet.goog.getCookie('HSID'));
+    assert(ssid != puppet.goog.getCookie('SSID'));
+  });
+
+  // Logout and verify cookies cleared.
+  run(puppet.goog.logout);
+  run(function() {
+    assert(!puppet.goog.getCookie('SID'));
+    assert(!puppet.goog.getCookie('HSID'));
+    assert(!puppet.goog.getCookie('LSID'));
+    assert(!puppet.goog.getCookie('SSID'));
+  });
+};
+</script>

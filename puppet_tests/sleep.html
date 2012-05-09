@@ -1,7 +1,5 @@
-<!DOCTYPE html>
+<!-- Copyright 2011 Google Inc. All Rights Reserved. -->
 <!--
- Copyright 2011 Google Inc. All Rights Reserved.
-
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
  You may obtain a copy of the License at
@@ -13,22 +11,17 @@
  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  See the License for the specific language governing permissions and
  limitations under the License.
-
 -->
-<html>
-<head>
-<title>logging_test.html</title>
-<script src="../../../javascript/closure/base.js"></script>
-<script type="text/javascript">
-  goog.require('goog.testing.jsunit');
-</script>
-<script src="../puppet.js"></script>
-</head>
-<body></body>
 
-<script type="text/javascript">
-function testName() {
-  assertContains('modules/puppet_test.html', puppet.name());
-}
+<script src=../puppet.js></script>
+<script src=../google.js></script>
+<script>
+/**
+ * Test that the sleep command is not subject to a timeout.
+ */
+window.onload = function() {
+  // Set the command timeout shorter so this test runs quickly.
+  puppet.PARAMS.timeout = 5;
+  run(sleep, 10);
+};
 </script>
-</html>

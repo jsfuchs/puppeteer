@@ -18,6 +18,9 @@
 
 goog.provide('puppet.logging');
 
+goog.require('goog.array');
+goog.require('goog.string');
+
 
 /**
  * List of callbacks to send echo'ed strings to.
@@ -149,6 +152,8 @@ puppet.logging.log = function(x) {
  * @param {*} x Anything, but assumes strings are HTML.
  */
 puppet.logging.error = function(x) {
+  // Show pending debug messages immediately when an error occurs.
+  puppet.logging.DebugRecorder_.getInstance().echoMessages();
   puppet.logging.log(x);
   if (puppet.logging.errorListener_) {
     puppet.logging.errorListener_();
@@ -205,7 +210,8 @@ puppet.logging.maybeLogDebugMessages = function(commandIsTrue) {
 
 /**
  * DebugRecorder class. Contains debug message lists for display when
- * run-commands return false, and has functions to clear and echo these.
+ * run-commands or assertions return false, and has functions to clear and echo
+ * these.
  * To add a debug message from a command, use puppet.debug(message).
  *
  * @private
@@ -220,7 +226,7 @@ puppet.logging.DebugRecorder_ = function() {
    */
   this.debugMessages_ = [];
   /**
-   * List of messages last time maybeEchoDebugMessages was called.
+   * List of messages last time maybeEchoMessages was called.
    *
    * @type {!Array.<string>}
    * @private
@@ -250,7 +256,7 @@ goog.addSingletonGetter(puppet.logging.DebugRecorder_);
 
 
 /**
- * Log debug messages if:
+ * Logs debug messages if:
  * A command has returned false for a period of time and messages are new
  * or have changed.
  * A command has returned false for this period of time and then becomes true.
@@ -260,18 +266,47 @@ goog.addSingletonGetter(puppet.logging.DebugRecorder_);
 puppet.logging.DebugRecorder_.prototype.maybeEchoMessages =
     function(commandIsTrue) {
   if (commandIsTrue) {
-    this.debugMessages_ = [];
-    this.prevDebugMessages_ = [];
-    this.falseCounter_ = 0;
+    this.resetMessages_();
   } else {
     this.falseCounter_++;
     if (this.falseCounter_ > this.FALSE_THRESHOLD_ &&
         !goog.array.equals(this.debugMessages_, this.prevDebugMessages_)) {
-      puppet.logging.log('DEBUG: ' + this.debugMessages_.join('<br>DEBUG: '));
+      this.logDebugMessages_();
       this.prevDebugMessages_ = this.debugMessages_;
     }
     this.debugMessages_ = [];
   }
+};
+
+
+/**
+ * Logs debug messages. The messages are logged immediately and then discarded,
+ * so they are never shown by maybeEchoMessages.
+ */
+puppet.logging.DebugRecorder_.prototype.echoMessages = function() {
+  this.logDebugMessages_();
+  this.resetMessages_();
+};
+
+
+/**
+ * Sends this recorder's debug messages to the Puppet log.
+ * @private
+ */
+puppet.logging.DebugRecorder_.prototype.logDebugMessages_ = function() {
+  puppet.logging.log('DEBUG: ' + this.debugMessages_.join('<br>DEBUG: '));
+};
+
+
+/**
+ * Clears the messages from this recorder and resets the timers for determining
+ * when to show a message.
+ * @private
+ */
+puppet.logging.DebugRecorder_.prototype.resetMessages_ = function() {
+  this.debugMessages_ = [];
+  this.prevDebugMessages_ = [];
+  this.falseCounter_ = 0;
 };
 
 

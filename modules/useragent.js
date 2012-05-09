@@ -22,7 +22,9 @@ goog.require('goog.userAgent');
 goog.require('goog.userAgent.platform');
 goog.require('goog.userAgent.product');
 goog.require('goog.userAgent.product.isVersion');
+goog.require('puppet.logging');
 goog.require('puppet.params');
+
 
 /**
  * @type {{
@@ -37,12 +39,76 @@ puppet.userAgent.PARAMS = {
 
 
 /**
+ * Version on Android OS or null if not on Android.
+ * @type {string}
+ * @private
+ */
+puppet.userAgent.ANDROID_VERSION_;
+
+
+/**
+ * Whether we are on Blackberry.
+ * @type {boolean}
+ * @private
+ */
+puppet.userAgent.BLACKBERRY_;
+
+
+/**
+ * Whether we are on Blackberry Playbook.
+ * @type {boolean}
+ * @private
+ */
+puppet.userAgent.PLAYBOOK_;
+
+
+/**
+ * Whether we are on Dolfin.
+ * This is a special case because goog.userAgent does not handle it.
+ * @type {boolean}
+ * @private
+ */
+puppet.userAgent.DOLFIN_;
+
+
+/**
+ * Initializes all the custom constants above using a given userAgent string.
+ * This lives in a separate function, because it is called by init_() with a
+ * spoofed userAgent for the purposes of testing.
+ *
+ * @param {string} userAgentString User agent string.
+ * @private
+ */
+puppet.userAgent.initCustomConstants_ = function(userAgentString) {
+  if (goog.userAgent.product.ANDROID) {
+    var match = /Android\s+([0-9\.]+)/.exec(userAgentString);
+    puppet.userAgent.ANDROID_VERSION_ = match ? match[1] : '0';
+  } else {
+    puppet.userAgent.ANDROID_VERSION_ = '';
+  }
+  puppet.userAgent.BLACKBERRY_ = /BlackBerry/.test(userAgentString);
+  puppet.userAgent.PLAYBOOK_ = /PlayBook/.test(userAgentString);
+  puppet.userAgent.DOLFIN_ = /Dolfin/.test(userAgentString);
+};
+
+// Initialize the above custom constants with the real user agent.
+(function() {
+  var userAgentString = goog.userAgent.getUserAgentString();
+  if (!userAgentString) {
+    puppet.logging.error('Null or empty useragent string');
+    return;
+  }
+  puppet.userAgent.initCustomConstants_(userAgentString);
+})();
+
+
+/**
  * If running Firefox with specified versions.
  *
- * @param {(string|number|null)=} opt_min Min version.
+ * @param {(string|number)=} opt_min Min version.
  * @param {(string|number|null)=} opt_max Max version.
- * @return {boolean} True if userAgent matches firefox and matches the
- *   optional version parameters.  False otherwise.
+ * @return {boolean} True if userAgent matches Firefox and matches the
+ *   optional version parameters. False otherwise.
  */
 puppet.userAgent.isFirefox = function(opt_min, opt_max) {
   return goog.userAgent.product.FIREFOX &&
@@ -54,10 +120,10 @@ puppet.userAgent.isFirefox = function(opt_min, opt_max) {
  * If running IE with specified versions.
  * IE refers to both the product and rendering engine.
  *
- * @param {(string|number|null)=} opt_min Min version.
+ * @param {(string|number)=} opt_min Min version.
  * @param {(string|number|null)=} opt_max Max version.
  * @return {boolean} True if userAgent matches IE and matches the
- *   optional version parameters.  False otherwise.
+ *   optional version parameters. False otherwise.
  */
 puppet.userAgent.isIE = function(opt_min, opt_max) {
   return goog.userAgent.product.IE &&
@@ -68,10 +134,10 @@ puppet.userAgent.isIE = function(opt_min, opt_max) {
 /**
  * If running Chrome with specified versions.
  *
- * @param {(string|number|null)=} opt_min Min version.
+ * @param {(string|number)=} opt_min Min version.
  * @param {(string|number|null)=} opt_max Max version.
- * @return {boolean} True if userAgent matches chrome and matches the
- *   optional version parameters.  False otherwise.
+ * @return {boolean} True if userAgent matches Chrome and matches the
+ *   optional version parameters. False otherwise.
  */
 puppet.userAgent.isChrome = function(opt_min, opt_max) {
   return goog.userAgent.product.CHROME &&
@@ -82,10 +148,10 @@ puppet.userAgent.isChrome = function(opt_min, opt_max) {
 /**
  * If running Safari with specified versions.
  *
- * @param {(string|number|null)=} opt_min Min version.
+ * @param {(string|number)=} opt_min Min version.
  * @param {(string|number|null)=} opt_max Max version.
- * @return {boolean} True if userAgent matches safari and matches the
- *   optional version parameters.  False otherwise.
+ * @return {boolean} True if userAgent matches Safari and matches the
+ *   optional version parameters. False otherwise.
  */
 puppet.userAgent.isSafari = function(opt_min, opt_max) {
   return goog.userAgent.product.SAFARI &&
@@ -97,10 +163,10 @@ puppet.userAgent.isSafari = function(opt_min, opt_max) {
  * If running Opera with specified versions.
  * Opera refers to both the product and rendering engine.
  *
- * @param {(string|number|null)=} opt_min Min version.
+ * @param {(string|number)=} opt_min Min version.
  * @param {(string|number|null)=} opt_max Max version.
- * @return {boolean} True if userAgent matches opera and matches the
- *   optional version parameters.  False otherwise.
+ * @return {boolean} True if userAgent matches Opera and matches the
+ *   optional version parameters. False otherwise.
  */
 puppet.userAgent.isOpera = function(opt_min, opt_max) {
   return goog.userAgent.product.OPERA &&
@@ -111,10 +177,10 @@ puppet.userAgent.isOpera = function(opt_min, opt_max) {
 /**
  * If running iPad with specified versions.
  *
- * @param {(string|number|null)=} opt_min Min version.
+ * @param {(string|number)=} opt_min Min version.
  * @param {(string|number|null)=} opt_max Max version.
- * @return {boolean} True if userAgent matches ipad and matches the
- *   optional version parameters.  False otherwise.
+ * @return {boolean} True if userAgent matches iPad and matches the
+ *   optional version parameters. False otherwise.
  */
 puppet.userAgent.isIPad = function(opt_min, opt_max) {
   return goog.userAgent.product.IPAD &&
@@ -125,10 +191,10 @@ puppet.userAgent.isIPad = function(opt_min, opt_max) {
 /**
  * If running iPhone with specified versions.
  *
- * @param {(string|number|null)=} opt_min Min version.
+ * @param {(string|number)=} opt_min Min version.
  * @param {(string|number|null)=} opt_max Max version.
- * @return {boolean} True if userAgent matches iphone and matches the
- *   optional version parameters.  False otherwise.
+ * @return {boolean} True if userAgent matches iPhone and matches the
+ *   optional version parameters. False otherwise.
  */
 puppet.userAgent.isIPhone = function(opt_min, opt_max) {
   return goog.userAgent.product.IPHONE &&
@@ -139,24 +205,53 @@ puppet.userAgent.isIPhone = function(opt_min, opt_max) {
 /**
  * If running Android with specified versions.
  *
- * @param {(string|number|null)=} opt_min Min version.
+ * @param {(string|number)=} opt_min Min version.
  * @param {(string|number|null)=} opt_max Max version.
- * @return {boolean} True if userAgent matches android and matches the
- *   optional version parameters.  False otherwise.
+ * @return {boolean} True if userAgent matches Android and matches the
+ *   optional version parameters. False otherwise.
  */
 puppet.userAgent.isAndroid = function(opt_min, opt_max) {
   return goog.userAgent.product.ANDROID &&
-         puppet.userAgent.checkProductVersion_(opt_min, opt_max);
+         puppet.userAgent.checkVersion_(puppet.userAgent.ANDROID_VERSION_,
+                                        opt_min, opt_max);
+};
+
+
+/**
+ * If running Android Mobile with specified versions.
+ *
+ * @param {(string|number)=} opt_min Min version.
+ * @param {(string|number|null)=} opt_max Max version.
+ * @return {boolean} True if userAgent matches Android Mobile and matches the
+ *   optional version parameters. False otherwise.
+ */
+puppet.userAgent.isAndroidMobile = function(opt_min, opt_max) {
+  return goog.userAgent.MOBILE &&
+         puppet.userAgent.isAndroid(opt_min, opt_max);
+};
+
+
+/**
+ * If running Android on Tablet with specified versions.
+ *
+ * @param {(string|number)=} opt_min Min version.
+ * @param {(string|number|null)=} opt_max Max version.
+ * @return {boolean} True if userAgent matches Android Tablet and matches the
+ *   optional version parameters. False otherwise.
+ */
+puppet.userAgent.isAndroidTablet = function(opt_min, opt_max) {
+  return !goog.userAgent.MOBILE &&
+         puppet.userAgent.isAndroid(opt_min, opt_max);
 };
 
 
 /**
  * If running Camino with specified versions.
  *
- * @param {(string|number|null)=} opt_min Min version.
+ * @param {(string|number)=} opt_min Min version.
  * @param {(string|number|null)=} opt_max Max version.
- * @return {boolean} True if userAgent matches camino and matches the
- *   optional version parameters.  False otherwise.
+ * @return {boolean} True if userAgent matches Camino and matches the
+ *   optional version parameters. False otherwise.
  */
 puppet.userAgent.isCamino = function(opt_min, opt_max) {
   return goog.userAgent.product.CAMINO &&
@@ -174,6 +269,7 @@ puppet.userAgent.isMobile = function() {
          puppet.userAgent.isIPhone() ||
          puppet.userAgent.isIPad() ||
          puppet.userAgent.isBlackberry() ||
+         puppet.userAgent.isPlaybook() ||
          puppet.userAgent.isDolfin();
 };
 
@@ -187,6 +283,7 @@ puppet.userAgent.isMultiTouch = function() {
   return puppet.userAgent.isIPad() ||
          puppet.userAgent.isIPhone() ||
          puppet.userAgent.isDolfin() ||
+         puppet.userAgent.isPlaybook() ||
          puppet.userAgent.isAndroid(3, null);
 };
 
@@ -195,42 +292,50 @@ puppet.userAgent.isMultiTouch = function() {
  * Check User Agent version.
  *
  * @param {(string|number)} version Version to check against.
- * @param {(string|number|null)=} opt_min Min Lower bound on the version,
- *   inclusive. If not provided, return true.  If null, no lower bound
+ * @param {(string|number)=} opt_min Min Lower bound on the version,
+ *   inclusive. If not provided, return true. If null, no lower bound
  *   is checked.
  * @param {(string|number|null)=} opt_max Upper bound on the version,
- *   exclusive. If not provided, checks that the version is exactly equal to
- *   opt_min.  If null, no upper bound is checked..
+ *   exclusive. If not provided, checks that the version is a prefix of
+ *   opt_min. If null, no upper bound is checked.
  * @return {boolean} Whether the version is in the specified range.
  * @private
  */
 puppet.userAgent.checkVersion_ = function(version, opt_min, opt_max) {
   if (!goog.isDef(opt_min)) {
     return true;
-  } else {
-    if (!goog.isNull(opt_min)) {
-      var compareToMin = goog.string.compareVersions(version, opt_min);
-      if (compareToMin < 0) {
-        return false;
-      } else if (!goog.isDef(opt_max)) {
-        return compareToMin == 0;
-      }
+  } else if (goog.string.compareVersions(version, opt_min) < 0) {
+    return false;
+  } else if (goog.isNull(opt_max)) {
+    return true;
+  } else if (!goog.isDef(opt_max)) {
+    // If no maximum is specified, we choose a default maximum that is the same
+    // as the minimum, except with a last version component equal to the min's
+    // last version component "plus one". When the last version component ends
+    // in a string, this means appending a character with ascii value zero.
+    var components = String(opt_min).split('.');
+    var lastIndex = components.length - 1;
+    var lastComponent = components[lastIndex];
+    var match = /(\d*)(\D*)/.exec(lastComponent) || ['', '', ''];
+    if (match[2]) {
+      components[lastIndex] = match[1] + match[2] + String.fromCharCode(0);
+    } else if (match[1]) {
+      components[lastIndex] = String(Number(match[1]) + 1);
     }
-    return !goog.isDef(opt_max) || goog.isNull(opt_max) ||
-        goog.string.compareVersions(version, opt_max) < 0;
+    opt_max = components.join('.');
   }
+  return goog.string.compareVersions(version, opt_max) < 0;
 };
 
 
 /**
  * Check Product version.
  *
- * @param {(string|number|null)=} opt_min Min Lower bound on the version,
- *   inclusive. If not provided, return true.  If null, no lower bound
- *   is checked.
+ * @param {(string|number)=} opt_min Min Lower bound on the version,
+ *   inclusive. If not provided, return true.
  * @param {(string|number|null)=} opt_max Upper bound on the version,
- *   exclusive. If not provided, checks that the version is exactly equal to
- *   opt_min.  If null, no upper bound is checked..
+ *   exclusive. If not provided, checks that the version is a prefix of
+ *   opt_min. If null, no upper bound is checked.
  * @return {boolean} Whether the version is in the specified range.
  * @private
  */
@@ -243,12 +348,12 @@ puppet.userAgent.checkProductVersion_ = function(opt_min, opt_max) {
 /**
  * Check Rendering Engine version.
  *
- * @param {(string|number|null)=} opt_min Min Lower bound on the version,
- *   inclusive. If not provided, return true.  If null, no lower bound
+ * @param {(string|number)=} opt_min Min Lower bound on the version,
+ *   inclusive. If not provided, return true. If null, no lower bound
  *   is checked.
  * @param {(string|number|null)=} opt_max Upper bound on the version,
- *   exclusive. If not provided, checks that the version is exactly equal to
- *   opt_min.  If null, no upper bound is checked..
+ *   exclusive. If not provided, checks that the version is a prefix of
+ *   opt_min. If null, no upper bound is checked.
  * @return {boolean} Whether the version is in the specified range.
  * @private
  */
@@ -261,12 +366,12 @@ puppet.userAgent.checkEngineVersion_ = function(opt_min, opt_max) {
 /**
  * Check Platform version.
  *
- * @param {(string|number|null)=} opt_min Min Lower bound on the version,
+ * @param {(string|number)=} opt_min Min Lower bound on the version,
  *   inclusive. If not provided, return true.  If null, no lower bound
  *   is checked.
  * @param {(string|number|null)=} opt_max Upper bound on the version,
- *   exclusive. If not provided, checks that the version is exactly equal to
- *   opt_min.  If null, no upper bound is checked..
+ *   exclusive. If not provided, checks that the version is a prefix of
+ *   opt_min. If null, no upper bound is checked.
  * @return {boolean} Whether the version is in the specified range.
  * @private
  */
@@ -277,28 +382,28 @@ puppet.userAgent.checkPlatformVersion_ = function(opt_min, opt_max) {
 
 
 /**
- * If running Webkit.
+ * If running WebKit.
  *
- * @param {(string|number|null)=} opt_min Min version.
+ * @param {(string|number)=} opt_min Min version.
  * @param {(string|number|null)=} opt_max Max version.
- * @return {boolean} True if renderotoing engine matches Webkit and matches the
- *   optional version parameters.  False otherwise.
+ * @return {boolean} True if rendering engine matches WebKit and matches the
+ *   optional version parameters. False otherwise.
  */
-puppet.userAgent.isWebkit = function(opt_min, opt_max) {
+puppet.userAgent.isWebKit = function(opt_min, opt_max) {
   return goog.userAgent.WEBKIT &&
       puppet.userAgent.checkEngineVersion_(opt_min, opt_max);
 };
 
 
 /**
- * If running Mobile Webkit.
+ * If running Mobile WebKit.
  *
- * @param {(string|number|null)=} opt_min Min version.
+ * @param {(string|number)=} opt_min Min version.
  * @param {(string|number|null)=} opt_max Max version.
- * @return {boolean} True if renderotoing engine matchebile Webkit and
- * matches the optional version parameters.  False otherwise.
+ * @return {boolean} True if rendering engine matches Mobile WebKit and
+ *   matches the optional version parameters. False otherwise.
  */
-puppet.userAgent.isMobileWebkit = function(opt_min, opt_max) {
+puppet.userAgent.isMobileWebKit = function(opt_min, opt_max) {
   return goog.userAgent.MOBILE &&
       puppet.userAgent.checkEngineVersion_(opt_min, opt_max);
 };
@@ -307,10 +412,10 @@ puppet.userAgent.isMobileWebkit = function(opt_min, opt_max) {
 /**
  * If running Gecko.
  *
- * @param {(string|number|null)=} opt_min Min version.
+ * @param {(string|number)=} opt_min Min version.
  * @param {(string|number|null)=} opt_max Max version.
  * @return {boolean} True if rendering engine matches Gecko and matches the
- *   optional version parameters.  False otherwise.
+ *   optional version parameters. False otherwise.
  */
 puppet.userAgent.isGecko = function(opt_min, opt_max) {
   return goog.userAgent.GECKO &&
@@ -322,10 +427,10 @@ puppet.userAgent.isGecko = function(opt_min, opt_max) {
  * If running Windows.
  * Only Windows and Mac support versions.
  *
- * @param {(string|number|null)=} opt_min Min version.
+ * @param {(string|number)=} opt_min Min version.
  * @param {(string|number|null)=} opt_max Max version.
  * @return {boolean} True if platform matches Windows and matches the
- *   optional version parameters.  False otherwise.
+ *   optional version parameters. False otherwise.
  */
 puppet.userAgent.isWindows = function(opt_min, opt_max) {
   return goog.userAgent.WINDOWS &&
@@ -337,10 +442,10 @@ puppet.userAgent.isWindows = function(opt_min, opt_max) {
  * If running Mac.
  * Only Windows and Mac support versions.
  *
- * @param {(string|number|null)=} opt_min Min version.
+ * @param {(string|number)=} opt_min Min version.
  * @param {(string|number|null)=} opt_max Max version.
  * @return {boolean} True if platform matches Mac and matches the
- *   optional version parameters.  False otherwise.
+ *   optional version parameters. False otherwise.
  */
 puppet.userAgent.isMac = function(opt_min, opt_max) {
   return goog.userAgent.MAC &&
@@ -375,6 +480,16 @@ puppet.userAgent.isX11 = function() {
  */
 puppet.userAgent.isBlackberry = function() {
   return puppet.userAgent.BLACKBERRY_;
+};
+
+
+/**
+ * If running Blackberry Playbook.
+ *
+ * @return {boolean} True if platform is Playbook.
+ */
+puppet.userAgent.isPlaybook = function() {
+  return puppet.userAgent.PLAYBOOK_;
 };
 
 
@@ -435,7 +550,6 @@ puppet.userAgent.init_ = function(ua) {
   goog.userAgent.WEBKIT = goog.userAgent.detectedWebkit_;
   goog.userAgent.MOBILE = goog.userAgent.detectedMobile_;
   goog.userAgent.SAFARI = goog.userAgent.WEBKIT;
-
   goog.userAgent.VERSION = goog.userAgent.determineVersion_();
 
   goog.userAgent.product.init_();
@@ -460,50 +574,10 @@ puppet.userAgent.init_ = function(ua) {
   goog.userAgent.WINDOWS = goog.userAgent.detectedWindows_;
   goog.userAgent.LINUX = goog.userAgent.detectedLinux_;
   goog.userAgent.X11 = goog.userAgent.detectedX11_;
-  puppet.userAgent.BLACKBERRY_ = puppet.userAgent.REGEX_BLACKBERRY_.test(ua);
-  puppet.userAgent.DOLFIN_ = puppet.userAgent.REGEX_DOLFIN_.test(ua);
+  goog.userAgent.platform.VERSION = goog.userAgent.platform.determineVersion_();
 
-  goog.userAgent.platform.VERSION =
-      goog.userAgent.platform.determineVersion_();
+  puppet.userAgent.initCustomConstants_(ua);
 };
-
-
-/**
- * A Regular expression used to detect Blackberry.
- * @type {RegExp}
- * @const
- * @private
- */
-puppet.userAgent.REGEX_BLACKBERRY_ = /BlackBerry/;
-
-
-/**
- * A Regular expression used to detect Dolfin.
- * @type {RegExp}
- * @const
- * @private
- */
-puppet.userAgent.REGEX_DOLFIN_ = /Dolfin/;
-
-
-/**
- * Whether we are on Blackberry or not.
- * This is a special case because goog.userAgent does not handle it.
- * @type {boolean}
- * @private
- */
-puppet.userAgent.BLACKBERRY_ = puppet.userAgent.REGEX_BLACKBERRY_.test(
-    goog.userAgent.getUserAgentString());
-
-
-/**
- * Whether we are on Dolfin or not.
- * This is a special case because goog.userAgent does not handle it.
- * @type {boolean}
- * @private
- */
-puppet.userAgent.DOLFIN_ = puppet.userAgent.REGEX_DOLFIN_.test(
-    goog.userAgent.getUserAgentString());
 
 
 // Initialize user agent settings based on puppet user agent parameter.

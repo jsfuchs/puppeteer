@@ -33,16 +33,16 @@ function testSetUrlParamWithNoSpecialChars() {
   assertEquals('http://www.google.com/search?hl=en&q=widgets', url);
 }
 
-function testSetUrlParamWithSlashQuestionMarkAndColonInValue() {
-  var url = puppet.params.setUrlParam('q', '/?:',
+function testSetUrlParamWithSlashQuestionMarkCommaAndColonInValue() {
+  var url = puppet.params.setUrlParam('q', '/?:,',
       'http://www.google.com/search?hl=en');
-  assertEquals('http://www.google.com/search?hl=en&q=/?:', url);
+  assertEquals('http://www.google.com/search?hl=en&q=/?:,', url);
 }
 
-function testSetUrlParamWithSlashQuestionMarkAndColonInQuery() {
+function testSetUrlParamWithSlashQuestionMarkCommaAndColonInQuery() {
   var url = puppet.params.setUrlParam('hl', 'en',
-      'http://www.google.com/search?q=/?:');
-  assertEquals('http://www.google.com/search?q=/?:&hl=en', url);
+      'http://www.google.com/search?q=/?:,');
+  assertEquals('http://www.google.com/search?q=/?:,&hl=en', url);
 }
 
 function testSetUrlParamWithAmpersandAndEqualsInValue() {

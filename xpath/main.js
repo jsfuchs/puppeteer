@@ -2373,7 +2373,7 @@ NodeSet.prototype.createWrapper = function(node) {
     sourceIndex = node.sourceIndex;
 
     if (typeof sourceIndex != 'number') {
-        type = node.nodeType;
+        var type = node.nodeType;
         switch (type) {
             case 2:
                 parent = node.parentNode;

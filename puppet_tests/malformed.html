@@ -18,16 +18,16 @@
 <script src=test_utils.js></script>
 <script>
 /**
- * Tests that retrieving the background color style works in spite of the
- * element flashing when the command accesses it.
+ * Test that malformed tests fail.
  */
 window.onload = function() {
-  run(function() {
-    var div = createElement('DIV');
-    div.id = 'blueDiv';
-    div.style.backgroundColor = 'rgb(0, 0, 255)';
-    div.innerHTML = 'My background is blue.';
-  });
-  run(style, id('blueDiv'), 'background-color', /rgb\(0, ?0, ?255\)|#0000ff/);
+  // Test that the empty Puppet test fails.
+  run(openAndExpectFail, 'malformed_empty_fail.htm');
+
+  // Test that a Puppet test with a syntax error fails.
+  // This can only be caught if the browser supports window.onerror.
+  if (SUPPORTS_WINDOW_ONERROR) {
+    run(openAndExpectFail, 'malformed_syntax_fail.htm');
+  }
 };
 </script>
