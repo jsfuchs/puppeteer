@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <script src=../puppet.js></script>
 <script>
 /**
@@ -9,7 +10,7 @@ window.onload = function() {
     var win = puppet.window();
     var dialogFn = win[dialogType];
     if (dialogFn) {
-      dialogFn.call(win, 'foo');
+      win[dialogType]('foo');
     } else {
       // This test will pass, so the opening test fails.
       puppet.echo('No valid dialog type provided');

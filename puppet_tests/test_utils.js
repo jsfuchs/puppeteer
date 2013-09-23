@@ -41,11 +41,26 @@ function createElement(tagName) {
 
 
 /**
+ * OperaDriver incorrectly injects scripts in popup windows (b/7684695).
+ * TODO(user): Remove this constant once this bug is fixed.
+ *
+ * @type {boolean}
+ */
+var POPUPS_BROKEN = puppet.userAgent.isOpera();
+
+
+/**
  * Loads a Puppet test within the Puppet test and waits for it to fail.
  *
  * @param {string} relativeUrl Relative URL to load.
+ * @param {!RegExp=} opt_reportValidator A regex to validate against the test
+ *     report.
  */
-function openAndExpectFail(relativeUrl) {
+function openAndExpectFail(relativeUrl, opt_reportValidator) {
+  if (POPUPS_BROKEN) {
+    return;
+  }
+
   // Open a popup window with the test that is expected to fail.
   var loc = window.location.href;
   var url = loc.substring(0, loc.lastIndexOf('/') + 1) + relativeUrl;
@@ -53,17 +68,36 @@ function openAndExpectFail(relativeUrl) {
   puppet.assert(!!win, 'Window failed to open: pop-up blocker enabled?');
 
   // Wait for the test to fail, in which case this function succeeds.
+  // On IE, the pop-up window can sometimes load in a borked state, in which the
+  // Puppet functions are available, but calling them raises permission errors,
+  // and there is no alternative that works other than opening a new window.
   run(function() {
-    if (!(win.puppet && win.puppet.getStatus && win.puppet.TestStatus)) {
+    try {
+      return hasTestFailed();
+    } catch (e) {
+      openAndExpectFail(relativeUrl);
+    }
+  });
+
+  // Return whether the test failed, closing the window if it has.
+  function hasTestFailed() {
+    if (!(win.puppet && win.puppet.getStatus && win.puppet.TestStatus &&
+        win.G_testRunner.getReport)) {
       return false;
     }
     var status = win.puppet.getStatus();
     puppet.debug('Test should fail but has status: ' + status);
     assert(status != win.puppet.TestStatus.PASSED);
     var success = (status == win.puppet.TestStatus.FAILED);
+    if (success && opt_reportValidator) {
+      puppet.debug('The test report: ' + win.G_testRunner.getReport() +
+          ' did not match the expectation (' + opt_reportValidator + ')');
+      success = success &&
+          opt_reportValidator.test(win.G_testRunner.getReport());
+    }
     if (success) {
       win.close();
     }
     return success;
-  });
+  }
 }

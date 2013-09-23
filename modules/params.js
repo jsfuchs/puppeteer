@@ -166,7 +166,7 @@ puppet.params.getUndeclared = function() {
 puppet.params.getUrlParam = function(name, opt_url) {
   var url = opt_url || puppet.params.windowUrl_();
   var value = new goog.Uri(url).getParameterValue(name);
-  return value === undefined ? null : (/** @type {string} */ value);
+  return value === undefined ? null : /** @type {string} */ (value);
 };
 
 

@@ -20,11 +20,11 @@
 <html>
 <head>
 <title>useragent_test.html</title>
-<script src="../../../javascript/closure/base.js"></script>
+<script src="test_bootstrap.js"></script>
 <script type="text/javascript">
   goog.require('goog.testing.jsunit');
+  goog.require('puppet.userAgent');
 </script>
-<script src="../puppet.js"></script>
 </head>
 <body></body>
 
@@ -176,6 +176,7 @@ function testIPhone() {
   assertEquals(true, puppet.userAgent.isMobileWebKit('420+', null));
   assertEquals(false, puppet.userAgent.isMobileWebKit(421, 422));
   assertEquals(false, puppet.userAgent.isAndroidMobile());
+  assertEquals(false, puppet.userAgent.isUIWebView());
 
   ua = 'Mozilla/5.0 (iPod; U; CPU like Mac OS X; en) AppleWebKit/420.1 ' +
        '(KHTML, like Gecko) Version/3.0 Mobile/3A100a Safari/419.3';
@@ -185,6 +186,14 @@ function testIPhone() {
   assertEquals(true, puppet.userAgent.isWebKit('420.1'));
   assertEquals(true, puppet.userAgent.isMobileWebKit('420.1'));
   assertEquals(true, puppet.userAgent.isMobileWebKit('420'));
+  assertEquals(false, puppet.userAgent.isUIWebView());
+
+  ua = 'Mozilla/5.0 (iPhone; CPU like Mac OS X) AppleWebKit/536.26 ' +
+       '(KHTML, like Gecko) Mobile/10B143';
+  assertProduct(ua, 'IPhone');
+  assertEquals(true, puppet.userAgent.isWebKit('536.26'));
+  assertEquals(true, puppet.userAgent.isMobileWebKit('536.26'));
+  assertEquals(true, puppet.userAgent.isUIWebView());
 }
 
 function testIPad() {
@@ -200,6 +209,14 @@ function testIPad() {
   assertEquals(false, puppet.userAgent.isIPad('4.0.4.8B334b'));
   assertEquals(true, puppet.userAgent.isWebKit('531.21.10'));
   assertEquals(true, puppet.userAgent.isMobileWebKit('531.21.10'));
+  assertEquals(false, puppet.userAgent.isUIWebView());
+
+  ua = 'Mozilla/5.0 (iPad; CPU like Mac OS X) AppleWebKit/536.26 ' +
+       '(KHTML, like Gecko) Mobile/10B146';
+  assertProduct(ua, 'IPad');
+  assertEquals(true, puppet.userAgent.isWebKit('536.26'));
+  assertEquals(true, puppet.userAgent.isMobileWebKit('536.26'));
+  assertEquals(true, puppet.userAgent.isUIWebView());
 }
 
 function testAndroid() {
@@ -440,6 +457,23 @@ function testIEEngine() {
   assertEngine('Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1; ' +
       'SV1; Arcor 5.005; .NET CLR 1.0.3705; .NET CLR 1.1.4322)', 'IE');
   assertEquals(true, puppet.userAgent.isIE('7.0'));
+  assertEquals(false, puppet.userAgent.isIETouch());
+
+  assertEngine('Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.2; WOW64;' +
+      ' Trident/6.0; Touch)', 'IE');
+  assertEquals(true, puppet.userAgent.isIE('10.0'));
+  assertEquals(true, puppet.userAgent.isIETouch());
+
+  assertEngine('Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.2; WOW64;' +
+      ' Trident/6.0; .NET4.0E; .NET4.0C)', 'IE');
+  assertEquals(true, puppet.userAgent.isIE('10.0'));
+  assertEquals(false, puppet.userAgent.isIETouch());
+  assertEquals(false, puppet.userAgent.isIEWebView());
+
+  assertEngine('Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.2; Win64;' +
+      ' x64; Trident/6.0; Touch; WebView/1.0)', 'IE');
+  assertEquals(true, puppet.userAgent.isIE('10.0'));
+  assertEquals(true, puppet.userAgent.isIEWebView());
 }
 
 function testOperaEngine() {
@@ -474,7 +508,7 @@ function testOperaEngine() {
 }
 
 function assertProduct(ua, product) {
-  puppet.userAgent.init_(ua);
+  puppet.userAgent.init(ua);
   assertEquals(product == 'Chrome', puppet.userAgent.isChrome());
   assertEquals(product == 'Firefox', puppet.userAgent.isFirefox());
   assertEquals(product == 'Opera', puppet.userAgent.isOpera());
@@ -489,7 +523,7 @@ function assertProduct(ua, product) {
 }
 
 function assertEngine(ua, engine) {
-  puppet.userAgent.init_(ua);
+  puppet.userAgent.init(ua);
   assertEquals(engine == 'IE', puppet.userAgent.isIE());
   assertEquals(engine == 'Gecko', puppet.userAgent.isGecko());
   assertEquals(engine == 'WebKit', puppet.userAgent.isWebKit());
@@ -498,7 +532,7 @@ function assertEngine(ua, engine) {
 }
 
 function assertPlatform(ua, platform) {
-  puppet.userAgent.init_(ua);
+  puppet.userAgent.init(ua);
   assertEquals(platform == 'Windows', puppet.userAgent.isWindows());
   assertEquals(platform == 'Mac', puppet.userAgent.isMac());
   assertEquals(platform == 'Linux', puppet.userAgent.isLinux());

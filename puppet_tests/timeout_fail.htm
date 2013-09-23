@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <script src=../puppet.js></script>
 <script>
 /**
@@ -5,7 +6,7 @@
  */
 window.onload = function() {
   // Set the command timeout shorter so this test runs quickly.
-  puppet.PARAMS.timeout = 3;
+  puppet.setCommandTimeoutSecs(3);
   run(function() {
     return false;
   });

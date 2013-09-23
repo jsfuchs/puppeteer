@@ -17,16 +17,58 @@
  * Puppet API.
  */
 
+goog.require('bot');
 goog.require('bot.Keyboard');
 goog.require('bot.Keyboard.Key');
 goog.require('bot.Keyboard.Keys');
-goog.require('bot.Mouse');
 goog.require('bot.Mouse.Button');
-goog.require('bot.Touchscreen');
+goog.require('goog.userAgent');
 goog.require('puppet');
+goog.require('puppet.Mouse');
+goog.require('puppet.Touchscreen');
 goog.require('puppet.logging');
 goog.require('puppet.userAgent');
 goog.require('puppet.xpath');
+
+
+//////////////////////////////////////////////////////////////////////////////
+//
+//  bot.dom
+//
+//////////////////////////////////////////////////////////////////////////////
+goog.exportSymbol('bot.dom.isShown', bot.dom.isShown);
+
+
+//////////////////////////////////////////////////////////////////////////////
+//
+//  bot.events
+//  DO NOT add any exports here as we plan to eliminate custom event firing
+//  from the official API.
+//
+//////////////////////////////////////////////////////////////////////////////
+goog.exportSymbol('bot.events', bot.events);
+goog.exportSymbol('bot.events.fire', bot.events.fire);
+goog.exportSymbol('bot.events.EventType', bot.events.EventType);
+goog.exportSymbol('bot.events.EventType.CLICK',
+                  bot.events.EventType.CLICK);
+goog.exportSymbol('bot.events.EventType.FOCUSIN',
+                  bot.events.EventType.FOCUSIN);
+goog.exportSymbol('bot.events.EventType.FOCUSOUT',
+                  bot.events.EventType.FOCUSOUT);
+goog.exportSymbol('bot.events.EventType.MOUSEDOWN',
+                  bot.events.EventType.MOUSEDOWN);
+goog.exportSymbol('bot.events.EventType.MOUSEMOVE',
+                  bot.events.EventType.MOUSEMOVE);
+goog.exportSymbol('bot.events.EventType.MOUSEOVER',
+                  bot.events.EventType.MOUSEOVER);
+goog.exportSymbol('bot.events.EventType.MOUSEUP',
+                  bot.events.EventType.MOUSEUP);
+goog.exportSymbol('bot.events.EventType.TOUCHEND',
+                  bot.events.EventType.TOUCHEND);
+goog.exportSymbol('bot.events.EventType.TOUCHMOVE',
+                  bot.events.EventType.TOUCHMOVE);
+goog.exportSymbol('bot.events.EventType.TOUCHSTART',
+                  bot.events.EventType.TOUCHSTART);
 
 
 //////////////////////////////////////////////////////////////////////////////
@@ -192,14 +234,14 @@ goog.exportProperty(bot.Keyboard.Keys, 'APOSTROPHE',
 //  bot.Mouse
 //
 //////////////////////////////////////////////////////////////////////////////
-goog.exportSymbol('bot.Mouse', bot.Mouse);
-goog.exportProperty(bot.Mouse.prototype, 'pressButton',
-                    bot.Mouse.prototype.pressButton);
-goog.exportProperty(bot.Mouse.prototype, 'releaseButton',
-                    bot.Mouse.prototype.releaseButton);
-goog.exportProperty(bot.Mouse.prototype, 'move', bot.Mouse.prototype.move);
-goog.exportProperty(bot.Mouse.prototype, 'scroll',
-                    bot.Mouse.prototype.scroll);
+goog.exportProperty(puppet.Mouse.prototype, 'pressButton',
+                    puppet.Mouse.prototype.pressButton);
+goog.exportProperty(puppet.Mouse.prototype, 'releaseButton',
+                    puppet.Mouse.prototype.releaseButton);
+goog.exportProperty(puppet.Mouse.prototype, 'move',
+                    puppet.Mouse.prototype.move);
+goog.exportProperty(puppet.Mouse.prototype, 'scroll',
+                    puppet.Mouse.prototype.scroll);
 
 
 //////////////////////////////////////////////////////////////////////////////
@@ -215,18 +257,45 @@ goog.exportProperty(bot.Mouse.Button, 'RIGHT', bot.Mouse.Button.RIGHT);
 
 //////////////////////////////////////////////////////////////////////////////
 //
-//  bot.Touchscreen
+//  puppet.Touchscreen
 //
 //////////////////////////////////////////////////////////////////////////////
-goog.exportSymbol('bot.Touchscreen', bot.Touchscreen);
-goog.exportProperty(bot.Touchscreen.prototype, 'isPressed',
-                    bot.Touchscreen.prototype.isPressed);
-goog.exportProperty(bot.Touchscreen.prototype, 'move',
-                    bot.Touchscreen.prototype.move);
-goog.exportProperty(bot.Touchscreen.prototype, 'press',
-                    bot.Touchscreen.prototype.press);
-goog.exportProperty(bot.Touchscreen.prototype, 'release',
-                    bot.Touchscreen.prototype.release);
+goog.exportProperty(puppet.Touchscreen.prototype, 'isPressed',
+                    puppet.Touchscreen.prototype.isPressed);
+goog.exportProperty(puppet.Touchscreen.prototype, 'move',
+                    puppet.Touchscreen.prototype.move);
+goog.exportProperty(puppet.Touchscreen.prototype, 'press',
+                    puppet.Touchscreen.prototype.press);
+goog.exportProperty(puppet.Touchscreen.prototype, 'release',
+                    puppet.Touchscreen.prototype.release);
+
+
+/**
+ * A wrapper for goog.exportSymbol that overrides the function's toString method
+ * so that puppet logging is more readable.
+ *
+ * @param {string} name Unobfuscated name to export.
+ * @param {*} object Object the name should point to.
+ */
+puppet.exportSymbol = function(name, object) {
+  if (!goog.isDefAndNotNull(object)) {
+    throw new Error(name);
+  }
+  object.toString = function() {
+    return name;
+  };
+  goog.exportSymbol(name, object);
+
+  // To export window properties in IE9 standards mode, we need to use
+  // Object.defineProperty; goog.exportSymbol('focus', focus) does not work.
+  if (name in window && goog.userAgent.IE &&
+      goog.userAgent.isVersionOrHigher(9) && 'defineProperty' in Object) {
+    Object.defineProperty(window, name, {
+      value: object,
+      writable: true
+    });
+  }
+};
 
 
 //////////////////////////////////////////////////////////////////////////////
@@ -234,75 +303,103 @@ goog.exportProperty(bot.Touchscreen.prototype, 'release',
 //  puppet
 //
 //////////////////////////////////////////////////////////////////////////////
-goog.exportSymbol('all', all);
-goog.exportSymbol('assert', assert);
-goog.exportSymbol('assertEq', assertEq);
-goog.exportSymbol('assertNotEq', assertNotEq);
-goog.exportSymbol('attribute', attribute);
-goog.exportSymbol('back', back);
-goog.exportSymbol('blur', blur);
-goog.exportSymbol('clear', clear);
-goog.exportSymbol('click', click);
-goog.exportSymbol('count', count);
-goog.exportSymbol('dialog', dialog);
-goog.exportSymbol('doubleclick', doubleclick);
-goog.exportSymbol('drag', drag);
-goog.exportSymbol('focus', focus);
-goog.exportSymbol('follow', follow);
-goog.exportSymbol('forward', forward);
-goog.exportSymbol('input', input);
-goog.exportSymbol('load', load);
-goog.exportSymbol('mouse', mouse);
-goog.exportSymbol('movemouse', movemouse);
-goog.exportSymbol('none', none);
-goog.exportSymbol('not', not);
-goog.exportSymbol('opacity', opacity);
-goog.exportSymbol('pinch', pinch);
-goog.exportSymbol('present', present);
-goog.exportSymbol('property', property);
-goog.exportSymbol('reload', reload);
-goog.exportSymbol('rightclick', rightclick);
-goog.exportSymbol('rotate', rotate);
-goog.exportSymbol('run', run);
-goog.exportSymbol('scrollmouse', scrollmouse);
-goog.exportSymbol('selected', selected);
-goog.exportSymbol('select', select);
-goog.exportSymbol('shown', shown);
-goog.exportSymbol('sleep', sleep);
-goog.exportSymbol('some', some);
-goog.exportSymbol('stop', stop);
-goog.exportSymbol('style', style);
-goog.exportSymbol('text', text);
-goog.exportSymbol('type', type);
-goog.exportSymbol('puppet.addFinalizer', puppet.addFinalizer);
-goog.exportSymbol('puppet.appendLoadParams', puppet.appendLoadParams);
-goog.exportSymbol('puppet.assert', puppet.assert);
-goog.exportSymbol('puppet.attribute', puppet.attribute);
-goog.exportSymbol('puppet.call', puppet.call);
-goog.exportSymbol('puppet.debug', puppet.debug);
-goog.exportSymbol('puppet.define', puppet.define);
-goog.exportSymbol('puppet.document', puppet.document);
-goog.exportSymbol('puppet.echo', puppet.echo);
-goog.exportSymbol('puppet.elem', puppet.elem);
-goog.exportSymbol('puppet.elems', puppet.elems);
-goog.exportSymbol('puppet.focus', puppet.focus);
-goog.exportSymbol('puppet.include', puppet.include);
-goog.exportSymbol('puppet.initWindow', puppet.initWindow);
-goog.exportSymbol('puppet.keyboard', puppet.keyboard);
-goog.exportSymbol('puppet.left', puppet.left);
-goog.exportSymbol('puppet.location', puppet.location);
-goog.exportSymbol('puppet.match', puppet.match);
-goog.exportSymbol('puppet.matches', puppet.matches);
-goog.exportSymbol('puppet.mouse', puppet.mouse);
-goog.exportSymbol('puppet.resizeHeight', puppet.resizeHeight);
-goog.exportSymbol('puppet.resizeWidth', puppet.resizeWidth);
-goog.exportSymbol('puppet.setLastFinalizer', puppet.setLastFinalizer);
-goog.exportSymbol('puppet.step', puppet.step);
-goog.exportSymbol('puppet.style', puppet.style);
-goog.exportSymbol('puppet.text', puppet.text);
-goog.exportSymbol('puppet.top', puppet.top);
-goog.exportSymbol('puppet.touchscreen', puppet.touchscreen);
-goog.exportSymbol('puppet.window', puppet.window);
+
+
+puppet.exportSymbol('all', all);
+puppet.exportSymbol('assert', assert);
+puppet.exportSymbol('assertEq', assertEq);
+puppet.exportSymbol('assertNotEq', assertNotEq);
+puppet.exportSymbol('attribute', attribute);
+puppet.exportSymbol('back', back);
+puppet.exportSymbol('blur', blur);
+puppet.exportSymbol('clear', clear);
+puppet.exportSymbol('click', click);
+puppet.exportSymbol('count', count);
+puppet.exportSymbol('dialog', dialog);
+puppet.exportSymbol('doubleclick', doubleclick);
+puppet.exportSymbol('drag', drag);
+puppet.exportSymbol('focus', focus);
+puppet.exportSymbol('follow', follow);
+puppet.exportSymbol('forward', forward);
+puppet.exportSymbol('input', input);
+puppet.exportSymbol('load', load);
+puppet.exportSymbol('mouse', mouse);
+puppet.exportSymbol('movemouse', movemouse);
+puppet.exportSymbol('none', none);
+puppet.exportSymbol('not', not);
+puppet.exportSymbol('opacity', opacity);
+puppet.exportSymbol('orient', orient);
+puppet.exportSymbol('pinch', pinch);
+puppet.exportSymbol('present', present);
+puppet.exportSymbol('property', property);
+puppet.exportSymbol('reload', reload);
+puppet.exportSymbol('resize', resize);
+puppet.exportSymbol('rightclick', rightclick);
+puppet.exportSymbol('rotate', rotate);
+puppet.exportSymbol('run', run);
+puppet.exportSymbol('scroll', scroll);
+puppet.exportSymbol('scrollmouse', scrollmouse);
+puppet.exportSymbol('selected', selected);
+puppet.exportSymbol('select', select);
+puppet.exportSymbol('shown', shown);
+puppet.exportSymbol('sleep', sleep);
+puppet.exportSymbol('some', some);
+puppet.exportSymbol('stop', stop);
+puppet.exportSymbol('style', style);
+puppet.exportSymbol('swipe', swipe);
+puppet.exportSymbol('switchto', switchto);
+puppet.exportSymbol('tap', tap);
+puppet.exportSymbol('text', text);
+puppet.exportSymbol('type', type);
+puppet.exportSymbol('puppet', puppet);
+puppet.exportSymbol('puppet.PARAMS', puppet.PARAMS);
+puppet.exportSymbol('puppet.PARAMS.fullpage', puppet.PARAMS.fullpage);
+puppet.exportSymbol('puppet.PARAMS.time', puppet.PARAMS.time);
+puppet.exportSymbol('puppet.TestStatus', puppet.TestStatus);
+puppet.exportSymbol('puppet.addElemListener', puppet.addElemListener);
+puppet.exportSymbol('puppet.addFinalizer', puppet.finalize.addFinalizer);
+puppet.exportSymbol('puppet.addMenuItems', puppet.addMenuItems);
+puppet.exportSymbol('puppet.appendLoadParams', puppet.appendLoadParams);
+puppet.exportSymbol('puppet.assert', puppet.assert);
+puppet.exportSymbol('puppet.attribute', puppet.attribute);
+puppet.exportSymbol('puppet.call', puppet.call);
+puppet.exportSymbol('puppet.clientRect', puppet.clientRect);
+puppet.exportSymbol('puppet.command', puppet.command);
+puppet.exportSymbol('puppet.debug', puppet.debug);
+puppet.exportSymbol('puppet.define', puppet.define);
+puppet.exportSymbol('puppet.document', puppet.document);
+puppet.exportSymbol('puppet.echo', puppet.echo);
+puppet.exportSymbol('puppet.elem', puppet.elem);
+puppet.exportSymbol('puppet.elems', puppet.elems);
+puppet.exportSymbol('puppet.focus', puppet.focus);
+puppet.exportSymbol('puppet.getCommandTimeoutSecs',
+                    puppet.getCommandTimeoutSecs);
+puppet.exportSymbol('puppet.getStatus', puppet.getStatus);
+puppet.exportSymbol('puppet.include', puppet.include);
+puppet.exportSymbol('puppet.initWindow', puppet.initWindow);
+puppet.exportSymbol('puppet.keyboard', puppet.keyboard);
+puppet.exportSymbol('puppet.left', puppet.left);
+puppet.exportSymbol('puppet.location', puppet.location);
+puppet.exportSymbol('puppet.match', puppet.match);
+puppet.exportSymbol('puppet.matches', puppet.matches);
+puppet.exportSymbol('puppet.mouse', puppet.mouse);
+puppet.exportSymbol('puppet.request', puppet.request);
+puppet.exportSymbol('puppet.resizeHeight', puppet.resizeHeight);
+puppet.exportSymbol('puppet.resizeWidth', puppet.resizeWidth);
+puppet.exportSymbol('puppet.setCommandTimeoutSecs',
+                    puppet.setCommandTimeoutSecs);
+puppet.exportSymbol('puppet.setDelayMs', puppet.setDelayMs);
+puppet.exportSymbol('puppet.setForceMouseActions', puppet.setForceMouseActions);
+puppet.exportSymbol('puppet.setRetryMs', puppet.setRetryMs);
+puppet.exportSymbol('puppet.style', puppet.style);
+puppet.exportSymbol('puppet.testUrl', puppet.testUrl);
+puppet.exportSymbol('puppet.text', puppet.text);
+puppet.exportSymbol('puppet.top', puppet.top);
+puppet.exportSymbol('puppet.touchscreen', puppet.touchscreen);
+puppet.exportSymbol('puppet.window', puppet.window);
+goog.exportProperty(puppet.TestStatus, 'FAILED', puppet.TestStatus.FAILED);
+goog.exportProperty(puppet.TestStatus, 'LOADED', puppet.TestStatus.LOADED);
+goog.exportProperty(puppet.TestStatus, 'PASSED', puppet.TestStatus.PASSED);
 
 
 //////////////////////////////////////////////////////////////////////////////
@@ -310,12 +407,32 @@ goog.exportSymbol('puppet.window', puppet.window);
 //  puppet.logging
 //
 //////////////////////////////////////////////////////////////////////////////
-goog.exportSymbol('puppet.logging.addLogListener',
-                  puppet.logging.addLogListener);
-goog.exportSymbol('puppet.logging.debug', puppet.logging.debug);
-goog.exportSymbol('puppet.logging.log', puppet.logging.log);
-goog.exportSymbol('puppet.logging.error', puppet.logging.error);
-goog.exportSymbol('puppet.logging.toString', puppet.logging.toString);
+puppet.exportSymbol('puppet.logging.addLogListener',
+                    puppet.logging.addLogListener);
+puppet.exportSymbol('puppet.logging.debug', puppet.logging.debug);
+puppet.exportSymbol('puppet.logging.log', puppet.logging.log);
+puppet.exportSymbol('puppet.logging.error', puppet.logging.error);
+puppet.exportSymbol('puppet.logging.toString', puppet.logging.toString);
+
+
+//////////////////////////////////////////////////////////////////////////////
+//
+//  puppet.params
+//
+//////////////////////////////////////////////////////////////////////////////
+puppet.exportSymbol('puppet.params.declareBoolean',
+                    puppet.params.declareBoolean);
+puppet.exportSymbol('puppet.params.declareNumber', puppet.params.declareNumber);
+puppet.exportSymbol('puppet.params.declareString', puppet.params.declareString);
+puppet.exportSymbol('puppet.params.declareMultistring',
+                    puppet.params.declareMultistring);
+puppet.exportSymbol('puppet.params.declareRegExp', puppet.params.declareRegExp);
+puppet.exportSymbol('puppet.params.getAll', puppet.params.getAll);
+puppet.exportSymbol('puppet.params.getUndeclared', puppet.params.getUndeclared);
+puppet.exportSymbol('puppet.params.getUrlParam', puppet.params.getUrlParam);
+puppet.exportSymbol('puppet.params.setUrlParam', puppet.params.setUrlParam);
+puppet.exportSymbol('puppet.params.removeUrlParam',
+                    puppet.params.removeUrlParam);
 
 
 //////////////////////////////////////////////////////////////////////////////
@@ -323,34 +440,40 @@ goog.exportSymbol('puppet.logging.toString', puppet.logging.toString);
 //  puppet.userAgent
 //
 //////////////////////////////////////////////////////////////////////////////
-goog.exportSymbol('puppet.userAgent.isAndroid', puppet.userAgent.isAndroid);
-goog.exportSymbol('puppet.userAgent.isAndroidMobile',
-                  puppet.userAgent.isAndroidMobile);
-goog.exportSymbol('puppet.userAgent.isAndroidTablet',
-                  puppet.userAgent.isAndroidTablet);
-goog.exportSymbol('puppet.userAgent.isBlackberry',
-                  puppet.userAgent.isBlackberry);
-goog.exportSymbol('puppet.userAgent.isCamino', puppet.userAgent.isCamino);
-goog.exportSymbol('puppet.userAgent.isChrome', puppet.userAgent.isChrome);
-goog.exportSymbol('puppet.userAgent.isDolfin', puppet.userAgent.isDolfin);
-goog.exportSymbol('puppet.userAgent.isFirefox', puppet.userAgent.isFirefox);
-goog.exportSymbol('puppet.userAgent.isGecko', puppet.userAgent.isGecko);
-goog.exportSymbol('puppet.userAgent.isIE', puppet.userAgent.isIE);
-goog.exportSymbol('puppet.userAgent.isIPad', puppet.userAgent.isIPad);
-goog.exportSymbol('puppet.userAgent.isIPhone', puppet.userAgent.isIPhone);
-goog.exportSymbol('puppet.userAgent.isLinux', puppet.userAgent.isLinux);
-goog.exportSymbol('puppet.userAgent.isMac', puppet.userAgent.isMac);
-goog.exportSymbol('puppet.userAgent.isMobile', puppet.userAgent.isMobile);
-goog.exportSymbol('puppet.userAgent.isMobileWebKit',
-                  puppet.userAgent.isMobileWebKit);
-goog.exportSymbol('puppet.userAgent.isMultiTouch',
-                  puppet.userAgent.isMultiTouch);
-goog.exportSymbol('puppet.userAgent.isOpera', puppet.userAgent.isOpera);
-goog.exportSymbol('puppet.userAgent.isPlaybook', puppet.userAgent.isPlaybook);
-goog.exportSymbol('puppet.userAgent.isSafari', puppet.userAgent.isSafari);
-goog.exportSymbol('puppet.userAgent.isWebKit', puppet.userAgent.isWebKit);
-goog.exportSymbol('puppet.userAgent.isWindows', puppet.userAgent.isWindows);
-goog.exportSymbol('puppet.userAgent.isX11', puppet.userAgent.isX11);
+puppet.exportSymbol('puppet.userAgent.init', puppet.userAgent.init);
+puppet.exportSymbol('puppet.userAgent.isAndroid', puppet.userAgent.isAndroid);
+puppet.exportSymbol('puppet.userAgent.isAndroidMobile',
+                    puppet.userAgent.isAndroidMobile);
+puppet.exportSymbol('puppet.userAgent.isAndroidTablet',
+                    puppet.userAgent.isAndroidTablet);
+puppet.exportSymbol('puppet.userAgent.isBlackberry',
+                    puppet.userAgent.isBlackberry);
+puppet.exportSymbol('puppet.userAgent.isCamino', puppet.userAgent.isCamino);
+puppet.exportSymbol('puppet.userAgent.isChrome', puppet.userAgent.isChrome);
+puppet.exportSymbol('puppet.userAgent.isDolfin', puppet.userAgent.isDolfin);
+puppet.exportSymbol('puppet.userAgent.isFirefox', puppet.userAgent.isFirefox);
+puppet.exportSymbol('puppet.userAgent.isGecko', puppet.userAgent.isGecko);
+puppet.exportSymbol('puppet.userAgent.isIE', puppet.userAgent.isIE);
+puppet.exportSymbol('puppet.userAgent.isIETouch', puppet.userAgent.isIETouch);
+puppet.exportSymbol('puppet.userAgent.isIEWebView',
+                    puppet.userAgent.isIEWebView);
+puppet.exportSymbol('puppet.userAgent.isUIWebView',
+                    puppet.userAgent.isUIWebView);
+puppet.exportSymbol('puppet.userAgent.isIPad', puppet.userAgent.isIPad);
+puppet.exportSymbol('puppet.userAgent.isIPhone', puppet.userAgent.isIPhone);
+puppet.exportSymbol('puppet.userAgent.isLinux', puppet.userAgent.isLinux);
+puppet.exportSymbol('puppet.userAgent.isMac', puppet.userAgent.isMac);
+puppet.exportSymbol('puppet.userAgent.isMobile', puppet.userAgent.isMobile);
+puppet.exportSymbol('puppet.userAgent.isMobileWebKit',
+                    puppet.userAgent.isMobileWebKit);
+puppet.exportSymbol('puppet.userAgent.isMultiTouch',
+                    puppet.userAgent.isMultiTouch);
+puppet.exportSymbol('puppet.userAgent.isOpera', puppet.userAgent.isOpera);
+puppet.exportSymbol('puppet.userAgent.isPlaybook', puppet.userAgent.isPlaybook);
+puppet.exportSymbol('puppet.userAgent.isSafari', puppet.userAgent.isSafari);
+puppet.exportSymbol('puppet.userAgent.isWebKit', puppet.userAgent.isWebKit);
+puppet.exportSymbol('puppet.userAgent.isWindows', puppet.userAgent.isWindows);
+puppet.exportSymbol('puppet.userAgent.isX11', puppet.userAgent.isX11);
 
 
 //////////////////////////////////////////////////////////////////////////////
@@ -358,20 +481,90 @@ goog.exportSymbol('puppet.userAgent.isX11', puppet.userAgent.isX11);
 //  puppet.xpath
 //
 //////////////////////////////////////////////////////////////////////////////
-goog.exportSymbol('at', at);
-goog.exportSymbol('id', id);
-goog.exportSymbol('xclass', xclass);
-goog.exportSymbol('xhref', xhref);
-goog.exportSymbol('xid', xid);
-goog.exportSymbol('xname', xname);
-goog.exportSymbol('xsrc', xsrc);
-goog.exportSymbol('xstyle', xstyle);
-goog.exportSymbol('xtext', xtext);
-goog.exportSymbol('xtitle', xtitle);
-goog.exportSymbol('xtype', xtype);
-goog.exportSymbol('xvalue', xvalue);
-goog.exportSymbol('puppet.xpath.lowerCase', puppet.xpath.lowerCase);
-goog.exportSymbol('puppet.xpath.makeAttributeFunction',
-                  puppet.xpath.makeAttributeFunction);
-goog.exportSymbol('puppet.xpath.quote', puppet.xpath.quote);
-goog.exportSymbol('puppet.xpath.resolveXPath', puppet.xpath.resolveXPath);
+puppet.exportSymbol('at', at);
+puppet.exportSymbol('id', id);
+puppet.exportSymbol('xclass', xclass);
+puppet.exportSymbol('xclass.c', xclass['c']);
+puppet.exportSymbol('xclass.i', xclass['i']);
+puppet.exportSymbol('xclass.ic', xclass['ic']);
+puppet.exportSymbol('xclass.n', xclass['n']);
+puppet.exportSymbol('xclass.nc', xclass['nc']);
+puppet.exportSymbol('xclass.ni', xclass['ni']);
+puppet.exportSymbol('xclass.nic', xclass['nic']);
+puppet.exportSymbol('xhref', xhref);
+puppet.exportSymbol('xhref.c', xhref['c']);
+puppet.exportSymbol('xhref.i', xhref['i']);
+puppet.exportSymbol('xhref.ic', xhref['ic']);
+puppet.exportSymbol('xhref.n', xhref['n']);
+puppet.exportSymbol('xhref.nc', xhref['nc']);
+puppet.exportSymbol('xhref.ni', xhref['ni']);
+puppet.exportSymbol('xhref.nic', xhref['nic']);
+puppet.exportSymbol('xid', xid);
+puppet.exportSymbol('xid.c', xid['c']);
+puppet.exportSymbol('xid.i', xid['i']);
+puppet.exportSymbol('xid.ic', xid['ic']);
+puppet.exportSymbol('xid.n', xid['n']);
+puppet.exportSymbol('xid.nc', xid['nc']);
+puppet.exportSymbol('xid.ni', xid['ni']);
+puppet.exportSymbol('xid.nic', xid['nic']);
+puppet.exportSymbol('xname', xname);
+puppet.exportSymbol('xname.c', xname['c']);
+puppet.exportSymbol('xname.i', xname['i']);
+puppet.exportSymbol('xname.ic', xname['ic']);
+puppet.exportSymbol('xname.n', xname['n']);
+puppet.exportSymbol('xname.nc', xname['nc']);
+puppet.exportSymbol('xname.ni', xname['ni']);
+puppet.exportSymbol('xname.nic', xname['nic']);
+puppet.exportSymbol('xsrc', xsrc);
+puppet.exportSymbol('xsrc.c', xsrc['c']);
+puppet.exportSymbol('xsrc.i', xsrc['i']);
+puppet.exportSymbol('xsrc.ic', xsrc['ic']);
+puppet.exportSymbol('xsrc.n', xsrc['n']);
+puppet.exportSymbol('xsrc.nc', xsrc['nc']);
+puppet.exportSymbol('xsrc.ni', xsrc['ni']);
+puppet.exportSymbol('xsrc.nic', xsrc['nic']);
+puppet.exportSymbol('xstyle', xstyle);
+puppet.exportSymbol('xstyle.c', xstyle['c']);
+puppet.exportSymbol('xstyle.i', xstyle['i']);
+puppet.exportSymbol('xstyle.ic', xstyle['ic']);
+puppet.exportSymbol('xstyle.n', xstyle['n']);
+puppet.exportSymbol('xstyle.nc', xstyle['nc']);
+puppet.exportSymbol('xstyle.ni', xstyle['ni']);
+puppet.exportSymbol('xstyle.nic', xstyle['nic']);
+puppet.exportSymbol('xtext', xtext);
+puppet.exportSymbol('xtext.c', xtext['c']);
+puppet.exportSymbol('xtext.i', xtext['i']);
+puppet.exportSymbol('xtext.ic', xtext['ic']);
+puppet.exportSymbol('xtext.n', xtext['n']);
+puppet.exportSymbol('xtext.nc', xtext['nc']);
+puppet.exportSymbol('xtext.ni', xtext['ni']);
+puppet.exportSymbol('xtext.nic', xtext['nic']);
+puppet.exportSymbol('xtitle', xtitle);
+puppet.exportSymbol('xtitle.c', xtitle['c']);
+puppet.exportSymbol('xtitle.i', xtitle['i']);
+puppet.exportSymbol('xtitle.ic', xtitle['ic']);
+puppet.exportSymbol('xtitle.n', xtitle['n']);
+puppet.exportSymbol('xtitle.nc', xtitle['nc']);
+puppet.exportSymbol('xtitle.ni', xtitle['ni']);
+puppet.exportSymbol('xtitle.nic', xtitle['nic']);
+puppet.exportSymbol('xtype', xtype);
+puppet.exportSymbol('xtype.c', xtype['c']);
+puppet.exportSymbol('xtype.i', xtype['i']);
+puppet.exportSymbol('xtype.ic', xtype['ic']);
+puppet.exportSymbol('xtype.n', xtype['n']);
+puppet.exportSymbol('xtype.nc', xtype['nc']);
+puppet.exportSymbol('xtype.ni', xtype['ni']);
+puppet.exportSymbol('xtype.nic', xtype['nic']);
+puppet.exportSymbol('xvalue', xvalue);
+puppet.exportSymbol('xvalue.c', xvalue['c']);
+puppet.exportSymbol('xvalue.i', xvalue['i']);
+puppet.exportSymbol('xvalue.ic', xvalue['ic']);
+puppet.exportSymbol('xvalue.n', xvalue['n']);
+puppet.exportSymbol('xvalue.nc', xvalue['nc']);
+puppet.exportSymbol('xvalue.ni', xvalue['ni']);
+puppet.exportSymbol('xvalue.nic', xvalue['nic']);
+puppet.exportSymbol('puppet.xpath.lowerCase', puppet.xpath.lowerCase);
+puppet.exportSymbol('puppet.xpath.makeAttributeFunction',
+                    puppet.xpath.makeAttributeFunction);
+puppet.exportSymbol('puppet.xpath.quote', puppet.xpath.quote);
+puppet.exportSymbol('puppet.xpath.resolveXPath', puppet.xpath.resolveXPath);

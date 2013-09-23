@@ -72,6 +72,30 @@ puppet.userAgent.DOLFIN_;
 
 
 /**
+ * Whether we are on a version of Internet Explorer that has a touchscreen.
+ * @type {boolean}
+ * @private
+ */
+puppet.userAgent.IETOUCH_;
+
+
+/**
+ * Whether we are on a version of Internet Explorer using the WebView.
+ * @type {boolean}
+ * @private
+ */
+puppet.userAgent.IEWEBVIEW_;
+
+
+/**
+ * Whether we are on a version of UIWebView.
+ * @type {boolean}
+ * @private
+ */
+puppet.userAgent.UIWEBVIEW_;
+
+
+/**
  * Initializes all the custom constants above using a given userAgent string.
  * This lives in a separate function, because it is called by init_() with a
  * spoofed userAgent for the purposes of testing.
@@ -80,7 +104,7 @@ puppet.userAgent.DOLFIN_;
  * @private
  */
 puppet.userAgent.initCustomConstants_ = function(userAgentString) {
-  if (goog.userAgent.product.ANDROID) {
+  if (goog.userAgent.ANDROID) {
     var match = /Android\s+([0-9\.]+)/.exec(userAgentString);
     puppet.userAgent.ANDROID_VERSION_ = match ? match[1] : '0';
   } else {
@@ -89,6 +113,13 @@ puppet.userAgent.initCustomConstants_ = function(userAgentString) {
   puppet.userAgent.BLACKBERRY_ = /BlackBerry/.test(userAgentString);
   puppet.userAgent.PLAYBOOK_ = /PlayBook/.test(userAgentString);
   puppet.userAgent.DOLFIN_ = /Dolfin/.test(userAgentString);
+  puppet.userAgent.IETOUCH_ = goog.userAgent.IE &&
+                              /Touch/.test(userAgentString);
+  puppet.userAgent.IEWEBVIEW_ = goog.userAgent.IE &&
+                              /WebView/.test(userAgentString);
+  puppet.userAgent.UIWEBVIEW_ = (goog.userAgent.product.IPHONE ||
+                              goog.userAgent.product.IPAD) &&
+                              !/Safari/.test(userAgentString);
 };
 
 // Initialize the above custom constants with the real user agent.
@@ -211,7 +242,7 @@ puppet.userAgent.isIPhone = function(opt_min, opt_max) {
  *   optional version parameters. False otherwise.
  */
 puppet.userAgent.isAndroid = function(opt_min, opt_max) {
-  return goog.userAgent.product.ANDROID &&
+  return goog.userAgent.ANDROID &&
          puppet.userAgent.checkVersion_(puppet.userAgent.ANDROID_VERSION_,
                                         opt_min, opt_max);
 };
@@ -270,7 +301,9 @@ puppet.userAgent.isMobile = function() {
          puppet.userAgent.isIPad() ||
          puppet.userAgent.isBlackberry() ||
          puppet.userAgent.isPlaybook() ||
-         puppet.userAgent.isDolfin();
+         puppet.userAgent.isDolfin() ||
+         puppet.userAgent.isUIWebView() ||
+         puppet.userAgent.isIETouch();
 };
 
 
@@ -284,7 +317,8 @@ puppet.userAgent.isMultiTouch = function() {
          puppet.userAgent.isIPhone() ||
          puppet.userAgent.isDolfin() ||
          puppet.userAgent.isPlaybook() ||
-         puppet.userAgent.isAndroid(3, null);
+         puppet.userAgent.isAndroid(3, null) ||
+         puppet.userAgent.isIETouch();
 };
 
 
@@ -504,6 +538,36 @@ puppet.userAgent.isDolfin = function() {
 
 
 /**
+ * If running Internet Explorer on a device with a touchscreen.
+ *
+ * @return {boolean} True if IE with touchscreen.
+ */
+puppet.userAgent.isIETouch = function() {
+  return puppet.userAgent.IETOUCH_;
+};
+
+
+/**
+ * If running Internet Explorer on a device using WebView.
+ *
+ * @return {boolean} True if IE with WebView.
+ */
+puppet.userAgent.isIEWebView = function() {
+  return puppet.userAgent.IEWEBVIEW_;
+};
+
+
+/**
+ * If running UIWebView in IOS GSA.
+ *
+ * @return {boolean} True if UIWebView.
+ */
+puppet.userAgent.isUIWebView = function() {
+  return puppet.userAgent.UIWEBVIEW_;
+};
+
+
+/**
  * Forces reinitialization of goog.userAgent.
  * Modeled after javascript/closure/useragent/product_test.html.
  * Suppress the visibility check, because this needs to access
@@ -511,9 +575,8 @@ puppet.userAgent.isDolfin = function() {
  *
  * @suppress {visibility}
  * @param {string} ua String to simulate.
- * @private
  */
-puppet.userAgent.init_ = function(ua) {
+puppet.userAgent.init = function(ua) {
   var fakeNavigator = goog.object.clone(navigator);
   fakeNavigator.userAgent = ua;
   // Special case for X11.
@@ -574,6 +637,7 @@ puppet.userAgent.init_ = function(ua) {
   goog.userAgent.WINDOWS = goog.userAgent.detectedWindows_;
   goog.userAgent.LINUX = goog.userAgent.detectedLinux_;
   goog.userAgent.X11 = goog.userAgent.detectedX11_;
+  goog.userAgent.ANDROID = goog.userAgent.detectedAndroid_;
   goog.userAgent.platform.VERSION = goog.userAgent.platform.determineVersion_();
 
   puppet.userAgent.initCustomConstants_(ua);
@@ -582,5 +646,5 @@ puppet.userAgent.init_ = function(ua) {
 
 // Initialize user agent settings based on puppet user agent parameter.
 if (puppet.userAgent.PARAMS.useragent) {
-  puppet.userAgent.init_(puppet.userAgent.PARAMS.useragent);
+  puppet.userAgent.init(puppet.userAgent.PARAMS.useragent);
 }

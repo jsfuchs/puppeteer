@@ -49,6 +49,7 @@ puppet.Console = function() {
   this.logElem_.id = 'log';
   this.logElem_.style.fontSize = '10pt';
   this.logElem_.style.fontFamily = 'monospace';
+  this.logElem_.style.width = document.documentElement.offsetWidth + 'px';
   this.toggleLog(true);
 };
 

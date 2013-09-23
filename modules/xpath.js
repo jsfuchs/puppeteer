@@ -20,7 +20,9 @@ goog.provide('puppet.xpath');
 
 goog.require('bot.dom');
 goog.require('goog.dom');
+goog.require('goog.dom.TagName');
 goog.require('puppet.logging');
+goog.require('wgxpath');
 
 
 /**
@@ -31,7 +33,7 @@ goog.require('puppet.logging');
  * @private
  */
 puppet.xpath.resolver_ = (function() {
-  var namespaces = { svg: 'http://www.w3.org/2000/svg' };
+  var namespaces = { 'svg': 'http://www.w3.org/2000/svg' };
   return function(prefix) {
     return namespaces[prefix] || null;
   };
@@ -46,7 +48,7 @@ puppet.xpath.resolver_ = (function() {
  * @type {!XPathResult}
  * @private
  */
-puppet.xpath.EMPTY_XPATH_RESULT_ = (/** @type {!XPathResult} */ (function() {
+puppet.xpath.EMPTY_XPATH_RESULT_ = /** @type {!XPathResult} */ ((function() {
   return {
     iterateNext: function() { return null; }
   };
@@ -84,38 +86,21 @@ puppet.xpath.resolveXPath = function(path, win) {
                  !bot.dom.isElement(node, goog.dom.TagName.IFRAME)) {
         puppet.logging.error('Frame XPath resolves to a non-frame element.');
       }
-      var frame = (/** @type {!(HTMLFrameElement|HTMLIFrameElement)} */ node);
-      win = (/** @type {!Window} */ goog.dom.getFrameContentWindow(frame));
+      var frame = /** @type {!(HTMLFrameElement|HTMLIFrameElement)} */ (node);
+      win = /** @type {!Window} */ (goog.dom.getFrameContentWindow(frame));
       exp = path.substr(index2);
     }
   }
 
-  // The window.install() function is provided by the third party
-  // XPath library to install itself. We call install() on demand,
-  // not just once, so that it is installed for each new document
-  // loaded over the course of the test and for documents inside
-  // iframes from extending xpath expressions with '/content:'.
-  var xPathInstalled = goog.isFunction(win.document.evaluate);
-  if (!xPathInstalled) {
-    try {
-      window['install'](win);
-      xPathInstalled = goog.isFunction(win.document.evaluate);
-    } catch (e) {}
-    if (!xPathInstalled) {
-      puppet.logging.error('Failure to install XPath library');
-    }
+  try {
+    wgxpath.install(win);
+  } catch (e) {
+    puppet.logging.error('Exception during XPath library install: ' + e);
   }
 
-  // Evaluate the XPath, but save and restore the all() command, because
-  // the XPath library sometimes overwrites a global variable named 'all'.
-  // TODO(user): Perform this saving in puppet.js, where all() is defined.
-  var allSaved = window['all'];
-  var res = win.document.evaluate(
-      exp, win.document, puppet.xpath.resolver_, 0, null);
-  window['all'] = allSaved;
-
   // 0 = XPathResult.ANY_TYPE
-  return res;
+  return win.document.evaluate(
+      exp, win.document, puppet.xpath.resolver_, 0, null);
 };
 
 
@@ -158,13 +143,29 @@ function at(path, index) {
 
 
 /**
+ * Needed for the xpaths generator below.
+ * @typedef {
+ *     function(?string=, string=) : string | {
+ *       i: (function(?string=, string=) : string),
+ *       c: (function(?string=, string=) : string),
+ *       ic: (function(?string=, string=) : string),
+ *       n: (function(?string=, string=) : string),
+ *       nc: (function(?string=, string=) : string),
+ *       ni: (function(?string=, string=) : string),
+ *       nic: (function(?string=, string=) : string)
+ *     }}
+ */
+puppet.xpath.AttributeFunction;
+
+
+/**
  * Returns an function that: given a value and an optional context
  * returns an xpath prefixed by that context that matches an element
  * where the given key equals that value. If no context is provided to
  * the function, the default context '//*' (any element) is used.
  *
  * @param {string} key Attribute key.
- * @return {function(?string=, string=) : string} Function to generate
+ * @return {puppet.xpath.AttributeFunction} Function to generate
  *     xpaths for a matching attribute value.
  */
 puppet.xpath.makeAttributeFunction = function(key) {
@@ -172,31 +173,31 @@ puppet.xpath.makeAttributeFunction = function(key) {
       function(attr, opt_value) {
         return opt_value ? attr + '=' + opt_value : attr;
       });
-  attrEqualsFunc.i = puppet.xpath.attributeFunction_(key, true, false,
+  attrEqualsFunc['i'] = puppet.xpath.attributeFunction_(key, true, false,
       function(attr, value) {
         return attr + '=' + value;
       });
-  attrEqualsFunc.c = puppet.xpath.attributeFunction_(key, false, false,
+  attrEqualsFunc['c'] = puppet.xpath.attributeFunction_(key, false, false,
       function(attr, value) {
         return 'contains(' + attr + ',' + value + ')';
       });
-  attrEqualsFunc.ic = puppet.xpath.attributeFunction_(key, true, false,
+  attrEqualsFunc['ic'] = puppet.xpath.attributeFunction_(key, true, false,
       function(attr, value) {
         return 'contains(' + attr + ',' + value + ')';
       });
-  attrEqualsFunc.n = puppet.xpath.attributeFunction_(key, false, true,
+  attrEqualsFunc['n'] = puppet.xpath.attributeFunction_(key, false, true,
       function(attr, opt_value) {
         return opt_value ? attr + '=' + opt_value : attr;
       });
-  attrEqualsFunc.nc = puppet.xpath.attributeFunction_(key, false, true,
+  attrEqualsFunc['nc'] = puppet.xpath.attributeFunction_(key, false, true,
       function(attr, value) {
         return 'contains(' + attr + ',' + value + ')';
       });
-  attrEqualsFunc.ni = puppet.xpath.attributeFunction_(key, true, true,
+  attrEqualsFunc['ni'] = puppet.xpath.attributeFunction_(key, true, true,
       function(attr, value) {
         return attr + '=' + value;
       });
-  attrEqualsFunc.nic = puppet.xpath.attributeFunction_(key, true, true,
+  attrEqualsFunc['nic'] = puppet.xpath.attributeFunction_(key, true, true,
       function(attr, value) {
         return 'contains(' + attr + ',' + value + ')';
       });
@@ -284,7 +285,7 @@ puppet.xpath.attributeFunction_ = function(key, ignoreCase, negate, predFunc) {
  *
  * If the id is expected to be unique, always use id() instead.
  *
- * @type {function(string, string=):string}
+ * @type {puppet.xpath.AttributeFunction}
  * @see id
  */
 var xid = puppet.xpath.makeAttributeFunction('@id');
@@ -293,7 +294,7 @@ var xid = puppet.xpath.makeAttributeFunction('@id');
 /**
  * Generates XPaths to match elements with a given 'class' attribute.
  *
- * @type {function(string, string=):string}
+ * @type {puppet.xpath.AttributeFunction}
  */
 var xclass = puppet.xpath.makeAttributeFunction('@class');
 
@@ -304,7 +305,7 @@ var xclass = puppet.xpath.makeAttributeFunction('@class');
  * Note that 'window.name' is predefined. In WebKit, window.name is
  * special and cannot even be reassigned.
  *
- * @type {function(string, string=):string}
+ * @type {puppet.xpath.AttributeFunction}
  */
 var xname = puppet.xpath.makeAttributeFunction('@name');
 
@@ -312,7 +313,7 @@ var xname = puppet.xpath.makeAttributeFunction('@name');
 /**
  * Generates XPaths to match elements with a given 'title' attribute.
  *
- * @type {function(string, string=):string}
+ * @type {puppet.xpath.AttributeFunction}
  * @see puppet.pred
  */
 var xtitle = puppet.xpath.makeAttributeFunction('@title');
@@ -321,7 +322,7 @@ var xtitle = puppet.xpath.makeAttributeFunction('@title');
 /**
  * Generates XPaths to match elements with a given 'style' attribute.
  *
- * @type {function(string, string=):string}
+ * @type {puppet.xpath.AttributeFunction}
  */
 var xstyle = puppet.xpath.makeAttributeFunction('@style');
 
@@ -329,7 +330,7 @@ var xstyle = puppet.xpath.makeAttributeFunction('@style');
 /**
  * Generates XPaths to match elements with a given 'href' attribute.
  *
- * @type {function(string, string=):string}
+ * @type {puppet.xpath.AttributeFunction}
  */
 var xhref = puppet.xpath.makeAttributeFunction('@href');
 
@@ -337,7 +338,7 @@ var xhref = puppet.xpath.makeAttributeFunction('@href');
 /**
  * Generates XPaths to match elements with a given 'type' attribute.
  *
- * @type {function(string, string=):string}
+ * @type {puppet.xpath.AttributeFunction}
  */
 var xtype = puppet.xpath.makeAttributeFunction('@type');
 
@@ -345,7 +346,7 @@ var xtype = puppet.xpath.makeAttributeFunction('@type');
 /**
  * Generates XPaths to match elements with a given 'src' attribute.
  *
- * @type {function(string, string=):string}
+ * @type {puppet.xpath.AttributeFunction}
  */
 var xvalue = puppet.xpath.makeAttributeFunction('@value');
 
@@ -353,7 +354,7 @@ var xvalue = puppet.xpath.makeAttributeFunction('@value');
 /**
  * Generates XPaths to match elements with a given 'src' attribute.
  *
- * @type {function(string, string=):string}
+ * @type {puppet.xpath.AttributeFunction}
  */
 var xsrc = puppet.xpath.makeAttributeFunction('@src');
 
@@ -361,7 +362,7 @@ var xsrc = puppet.xpath.makeAttributeFunction('@src');
 /**
  * Generates XPaths to match elements with a given 'text()' subnode.
  *
- * @type {function(string, string=):string}
+ * @type {puppet.xpath.AttributeFunction}
  * @see puppet.pred
  */
 var xtext = puppet.xpath.makeAttributeFunction('text()');

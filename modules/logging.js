@@ -23,6 +23,14 @@ goog.require('goog.string');
 
 
 /**
+ * Starting time.
+ *
+ * @private {!Date}
+ */
+puppet.logging.startTime_ = new Date;
+
+
+/**
  * List of callbacks to send echo'ed strings to.
  *
  * @type {!Array.<function(string, string)>}
@@ -39,6 +47,26 @@ puppet.logging.logListeners_ = [];
  * @private
  */
 puppet.logging.MAX_FUNCTION_STRING_LENGTH_ = 50;
+
+
+/**
+ * Native console functions that will be hijacked.
+ * @enum {string}
+ * @private
+ */
+puppet.logging.ConsoleFunctionName_ = {
+  LOG: 'log',
+  WARN: 'warn',
+  ERROR: 'error'
+};
+
+
+/**
+ * Browser's native developer console member function stash.
+ * @type {!Object.<puppet.logging.ConsoleFunctionName_, function(...[?])>}
+ * @private
+ */
+puppet.logging.nativeConsoleFunctions_ = {};
 
 
 /**
@@ -65,12 +93,12 @@ puppet.logging.toString = function(x) {
 
   // Sniff out DOM elements and return their opening tag.
   if (type == 'object' && x.tagName) {
-    var elem = (/** @type {!Element} */ x);
+    var elem = /** @type {!Element} */ (x);
 
     // Use a cloneNode() workaround for browsers that don't support outerHTML.
     var outerHTML = elem.outerHTML;
     if (!outerHTML) {
-      var e = (/** @type {!Element} */ elem.cloneNode(false));
+      var e = /** @type {!Element} */ (elem.cloneNode(false));
       var dummy = e.ownerDocument.createElement('div');
       dummy.appendChild(e);
       outerHTML = dummy.innerHTML;
@@ -81,23 +109,27 @@ puppet.logging.toString = function(x) {
 
   // Try to return the name of functions but fall back to the code.
   } else if (type == 'function') {
-    x = (/** @type {!Object} */ x);  // Make compiler happy.
-
-    // In some browsers, named functions have a 'name' member; also some Puppet
-    // functions have their named stored in the Puppet 'name' property.
-    if (x.name) {
-      return x.name;
-    }
-
-    // If no name member, try to capture a name from the string representation.
+    x = /** @type {!Object} */ (x);  // Make compiler happy.
     var str = String(x);
-    var match = /^function ([a-zA-Z_]+)\(/.exec(str);
-    if (match) {
-      return match[1];
+
+    // Try to capture a name from the string representation.
+    // First, see if the string representation of the function has been set
+    // to the function name itself.
+    if (!/\s/.test(str)) {
+      return str;
+    } else if (x.name) {
+      // In some browsers, named functions have a 'name' member.
+      return x.name;
+    } else {
+      // Otherwise, try to match the name from the function listing.
+      var match = /^function ([^\)]+)\(/.exec(str);
+      if (match) {
+        return match[1];
+      }
     }
 
     // Replace any multiple whitespaces with a single space.
-    var code = str.replace(/\s{2,}/g, ' ');
+    var code = goog.string.htmlEscape(str.replace(/\s{2,}/g, ' '));
     return code.length < puppet.logging.MAX_FUNCTION_STRING_LENGTH_ ? code :
         code.substr(0, puppet.logging.MAX_FUNCTION_STRING_LENGTH_) + ' ...}';
 
@@ -111,11 +143,51 @@ puppet.logging.toString = function(x) {
 
   // For strings, show quotes around it.
   } else if (type == 'string') {
-    return '\'' + x + '\'';
+    return '\'' + goog.string.htmlEscape(/**@type {string}*/(x)) + '\'';
 
   // Convert anything else to a string.
   } else {
-    return String(x);
+    return goog.string.htmlEscape(String(x));
+  }
+};
+
+
+/**
+ * Proxies the console object passed into it. The original functions
+ * consoleObject.log, consoleObject.warn, consoleObject.error are stashed and
+ * new functions are assigned to them instead so that they get passed through
+ * to puppet.
+ *
+ * @param {!Console} consoleObject Caller should inject the window.console
+ *     object here.
+ */
+puppet.logging.hijackConsole = function(consoleObject) {
+  for (var fnKey in puppet.logging.ConsoleFunctionName_) {
+    var fnName = puppet.logging.ConsoleFunctionName_[fnKey];
+    var nativeConsoleFunction = generateNativeConsoleFunction(fnName);
+    puppet.logging.nativeConsoleFunctions_[fnName] = nativeConsoleFunction;
+    consoleObject[fnName] =
+        generateHijackedConsoleFunction(fnName, nativeConsoleFunction);
+  }
+
+  function generateNativeConsoleFunction(fnName) {
+    var nativeFunction = consoleObject[fnName];
+    if (nativeFunction && nativeFunction.apply) {
+      return goog.bind(nativeFunction, consoleObject);
+    } else {
+      return nativeFunction || goog.nullFunction;
+    }
+  }
+
+  function generateHijackedConsoleFunction(fnName, nativeConsoleFunction) {
+    var pre = 'Console ' + fnName + ': ';
+    return function(var_args) {
+      var msgObj = puppet.logging.formatMessage_.apply(null, arguments);
+      var text = pre + msgObj.text;
+      var html = pre + msgObj.html;
+      nativeConsoleFunction(text);
+      puppet.logging.notifyListeners_(html, text);
+    };
   }
 };
 
@@ -126,19 +198,62 @@ puppet.logging.toString = function(x) {
  * @param {*} x Anything, but assumes strings are HTML.
  */
 puppet.logging.log = function(x) {
-  var text, html;
-  if (typeof x == 'string') {
-    // Assume HTML and convert to plain text.
-    html = x;
-    text = goog.string.unescapeEntities(html.replace(/<br>/ig, '\n'));
-  } else {
-    // Convert plain text string to HTML.
-    text = puppet.logging.toString(x);
-    html = goog.string.htmlEscape(text.replace(/\n/g, '<br>'));
+  var msgObj = puppet.logging.formatMessage_(x);
+  var nativeConsoleLogFunction = puppet.logging.nativeConsoleFunctions_[
+      puppet.logging.ConsoleFunctionName_.LOG];
+  if (nativeConsoleLogFunction) {
+    // In IE 10, accessing the console after navigating cross domain will result
+    // in an exception due to executing code from a freed script.
+    try {
+      nativeConsoleLogFunction(msgObj.text);
+    } catch (e) {
+    }
   }
-  html += '<br>';
-  text += '\n';
+  puppet.logging.notifyListeners_(msgObj.html, msgObj.text);
+};
 
+
+/**
+ * Takes any number of log messages and translates them into a string that would
+ * be posted to the puppet console and into another string that would be
+ * appended to puppet.report_.
+ *
+ * @param {...} var_args Any number of messages to be logged by puppet.
+ * @return {{text: string, html: string}} Return object will contain:
+ *     text Use this to appended to puppet.report.
+ *     html This goes to puppet console (that shows up at bottom in the browser.
+ * @private
+ */
+puppet.logging.formatMessage_ = function(var_args) {
+  var aggregateText = '';
+  var aggregateHtml = '';
+  for (var i = 0; i < arguments.length; i++) {
+    var text, html;
+    var x = arguments[i];
+    if (typeof x == 'string') {
+      // Assume HTML and convert to plain text.
+      html = x;
+      text = goog.string.unescapeEntities(html.replace(/<br>/ig, '\n'));
+    } else {
+      // Convert plain text string to HTML.
+      text = puppet.logging.toString(x);
+      html = goog.string.htmlEscape(text.replace(/\n/g, '<br>'));
+    }
+    aggregateHtml += html + '<br>';
+    aggregateText += text + '\n';
+  }
+  return {text: aggregateText, html: aggregateHtml};
+};
+
+
+/**
+ * Notifies all puppet listeners of a log string.
+ *
+ * @param {string} html HTML representation of the log string.
+ * @param {string} text Textual representation of the log string.
+ * @private
+ */
+puppet.logging.notifyListeners_ = function(html, text) {
   // Echo to all the listeners.
   for (var i = 0; i < puppet.logging.logListeners_.length; i++) {
     puppet.logging.logListeners_[i](html, text);
@@ -164,6 +279,20 @@ puppet.logging.error = function(x) {
 
 
 /**
+ * If the value has a boolean evaluation of false, calls puppet.logging.error
+ * with the given logging string.
+ *
+ * @param {*} value Anything.
+ * @param {*=} opt_x Anything, but assumes strings are HTML; defaults to value.
+ */
+puppet.logging.check = function(value, opt_x) {
+  if (!value) {
+    puppet.logging.error(goog.isDef(opt_x) ? opt_x : value);
+  }
+};
+
+
+/**
  * Listener to notify when there is an error.
  *
  * @type {function()|null}
@@ -179,11 +308,7 @@ puppet.logging.errorListener_ = null;
  * @param {function()} listener The listener.
  */
 puppet.logging.setErrorListener = function(listener) {
-  if (puppet.logging.errorListener_) {
-    puppet.logging.error('error listener already set');
-  } else {
-    puppet.logging.errorListener_ = listener;
-  }
+  puppet.logging.errorListener_ = listener;
 };
 
 
@@ -317,4 +442,19 @@ puppet.logging.DebugRecorder_.prototype.resetMessages_ = function() {
  */
 puppet.logging.DebugRecorder_.prototype.addMessage = function(msg) {
   this.debugMessages_.push(msg);
+};
+
+
+/**
+ * Gets the elapsed seconds since the loading of the document.
+ *
+ * @return {string} the elapsed seconds.
+ */
+puppet.logging.time = function() {
+  var now = new Date;
+  var hour = goog.string.padNumber(now.getHours(), 2);
+  var min = goog.string.padNumber(now.getMinutes(), 2);
+  var sec = goog.string.padNumber(now.getSeconds(), 2);
+  var elapsed = (now - puppet.logging.startTime_) / 1000.0;
+  return hour + ':' + min + ':' + sec + ' (' + elapsed + 's)';
 };

@@ -17,18 +17,29 @@
 -->
 <html>
 <head>
-<title>logging_test.html</title>
-<script src="../../../javascript/closure/base.js"></script>
+<title>puppet_test.html</title>
+<script src="test_bootstrap.js"></script>
 <script type="text/javascript">
   goog.require('goog.testing.jsunit');
+
+  // Puppet tests infer the Puppet directory URL from the source of script
+  // elements on the page. For a unit test, we need to provide it explicitly.
+  var testUrl = window.location.href;
+  var puppetDirIndex = testUrl.lastIndexOf('/', testUrl.lastIndexOf('/') - 1);
+  window['PUPPET_DIRECTORY_URL'] = testUrl.substring(0, puppetDirIndex + 1);
+  goog.require('puppet');
 </script>
-<script src="../puppet.js"></script>
 </head>
 <body></body>
 
 <script type="text/javascript">
 function testName() {
-  assertContains('modules/puppet_test.html', puppet.name());
+  assertContains('modules/puppet_test.html', puppet.testUrl());
+}
+
+function testCommandTimeout() {
+  puppet.setCommandTimeoutSecs(10);
+  assertEquals(10, puppet.getCommandTimeoutSecs());
 }
 </script>
 </html>

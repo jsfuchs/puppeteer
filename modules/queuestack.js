@@ -18,6 +18,8 @@
 
 goog.provide('puppet.QueueStack');
 
+goog.require('goog.array');
+
 /**
  * A class representing a stack of queues. The constructor initializes
  * the number of queues in the stack to one.

@@ -19,11 +19,13 @@
 <html>
 <head>
 <title>xpath_test.html</title>
-<script src="../../../javascript/closure/base.js"></script>
+<script src="test_bootstrap.js"></script>
 <script type="text/javascript">
   goog.require('goog.testing.jsunit');
+  goog.require('puppet.logging');
+  goog.require('puppet.xpath');
+  goog.require('wgxpath');
 </script>
-<script src="../puppet.js"></script>
 <body></body>
 
 <script type="text/javascript">
@@ -45,6 +47,10 @@ function setUpPage() {
   var iframe2Doc = createElement(iframe1Doc, 'IFRAME', 'iframe2');
   createElement(iframe2Doc, 'DIV', 'div3');
   createElement(document, 'IFRAME', 'iframe3');
+  puppet.logging.setErrorListener(function() {
+    throw new Error('XPath evaluation error.');
+  });
+  wgxpath.install();
 }
 
 /**
@@ -124,7 +130,7 @@ function testIframeWithinIframeXpathResolve() {
   assertXPathResolvesTo(path, ['div3']);
 }
 
-function testMultiIframeContentXPathResolveThrowsException() {
+function testMultiIframeContentXPathResolveRaisesError() {
   var path = '//iframe/content:id("div1")';
   assertThrows(goog.partial(puppet.xpath.resolveXPath, path, window));
 }

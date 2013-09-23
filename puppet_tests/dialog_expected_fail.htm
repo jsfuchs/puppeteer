@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <script src=../puppet.js></script>
 <script>
 /**
@@ -5,7 +6,7 @@
  */
 window.onload = function() {
   // Lower the timeout so we don't wait a long time for the dialog to appear.
-  puppet.PARAMS.timeout = 2;
+  puppet.setCommandTimeoutSecs(2);
 
   function noop() {}
   var dialogType = puppet.params.getUrlParam('dialog');

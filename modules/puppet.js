@@ -24,19 +24,34 @@ goog.require('bot.Mouse');
 goog.require('bot.action');
 goog.require('bot.dom');
 goog.require('bot.events');
+goog.require('bot.userAgent');
 goog.require('bot.window');
 goog.require('goog.Uri');
 goog.require('goog.array');
+goog.require('goog.dom');
+goog.require('goog.dom.TagName');
+goog.require('goog.events');
+goog.require('goog.events.KeyCodes');
 goog.require('goog.math.Coordinate');
-goog.require('goog.net.cookies');
+goog.require('goog.math.Size');
+goog.require('goog.object');
+goog.require('goog.string');
+goog.require('goog.uri.utils');
+goog.require('goog.userAgent');
+goog.require('goog.userAgent.product');
 goog.require('puppet.Console');
-goog.require('puppet.QueueStack');
-goog.require('puppet.async');
+goog.require('puppet.Executor');
+goog.require('puppet.Mouse');
+goog.require('puppet.State');
+goog.require('puppet.TestCase');
+goog.require('puppet.Touchscreen');
+goog.require('puppet.elements');
+goog.require('puppet.finalize');
 goog.require('puppet.logging');
 goog.require('puppet.params');
-goog.require('puppet.stacktrace');
 goog.require('puppet.userAgent');
 goog.require('puppet.xpath');
+goog.require('webdriver.stacktrace');
 
 // Firefox 4+ ignores focus and blur events if it is not the active application.
 // Call the prototype focus() method because Puppet overrides the name focus.
@@ -54,7 +69,7 @@ if (!goog.global['G_testRunner']) {
      *
      * @return {string} Report.
      */
-    getReport: function() {
+    'getReport': function() {
       return puppet.report_;
     },
 
@@ -63,7 +78,7 @@ if (!goog.global['G_testRunner']) {
      *
      * @return {boolean} Whether or not the test is finished.
      */
-    isFinished: function() {
+    'isFinished': function() {
       return puppet.testStatus_ == puppet.TestStatus.FAILED ||
           puppet.testStatus_ == puppet.TestStatus.PASSED;
     },
@@ -73,20 +88,15 @@ if (!goog.global['G_testRunner']) {
      *
      * @return {boolean} Whether or not the test succeeded.
      */
-    isSuccess: function() {
+    'isSuccess': function() {
       return puppet.testStatus_ == puppet.TestStatus.PASSED;
+    },
+
+    'getTestResults': function() {
+      return puppet.resultsByName_;
     }
   };
 }
-
-/**
- * @type {{request: function(string, string=, ?string=, boolean=): ?string,
- *         DIRECTORY_URL: string,
- *         include: function(string): boolean}}
- * @private
- * @const
- */
-puppet.BOOTSTRAP_ = window['__BOOTSTRAP_'];
 
 /**
  * Makes a GET/POST request via an XMLHttpRequest.
@@ -96,10 +106,55 @@ puppet.BOOTSTRAP_ = window['__BOOTSTRAP_'];
  * @param {?string=} opt_body Request body; defaults to null.
  * @param {boolean=} opt_async Whether the request is asynchronous;
  *    defaults to false.
+ * @param {Object=} opt_headers Request headers; defaults to null.
  * @return {?string} Response text; null if the HTTP response status
  *     code is not 200.
  */
-puppet.request = puppet.BOOTSTRAP_.request;
+puppet.request = function(url, opt_type, opt_body, opt_async, opt_headers) {
+  if (!url) {
+    return null;
+  }
+
+  // Make and open the request in a cross-browser compatible way.
+  // The false argument makes the request synchronous.
+  var request = window.XMLHttpRequest ?
+      new XMLHttpRequest() :
+      new ActiveXObject('Microsoft.XMLHTTP');
+  var type = opt_type || 'GET';
+  var async = opt_async || false;
+  request.open(type, url, async);
+
+  // Ensures that pages are not cached in Google Chrome and Firefox.
+  request.setRequestHeader('cache-control', 'no-cache');
+  request.setRequestHeader('pragma', 'no-cache');
+  request.setRequestHeader('expires', '0');
+
+  // IE6 erroneously returns HTTP 200 Found for cached HTTP 404 Not-found
+  // requests. Neither setting 'Pragma=no-cache' nor 'Cache-Control=no-cache'
+  // fixes the problem. Use a valid HTTPDate instead of '0' to support strict
+  // HTTP servers. Setting this in Firefox will return unexpected results.
+  // See: http://en.wikibooks.org/wiki/XMLHttpRequest#Caching
+  if (/MSIE 6/.test(navigator.userAgent)) {
+    request.setRequestHeader('If-Modified-Since',
+        'Sat, 1 Jan 2000 00:00:00 GMT');
+  }
+
+  for (var key in opt_headers) {
+    request.setRequestHeader(key, opt_headers[key]);
+  }
+
+  // Under some conditions (such as 204 responses in IE6), sending the
+  // request can throw an error, in which case we return 'null'.
+  try {
+    request.send(opt_body || null);
+  } catch (e) {
+    return null;
+  }
+
+  // No response text if the request is asynchronous or if the (synchronous)
+  // request does not have a 200 status.
+  return async || request.status != 200 ? null : request.responseText;
+};
 
 /**
  * URL of the Puppet directory.
@@ -108,7 +163,29 @@ puppet.request = puppet.BOOTSTRAP_.request;
  * @private
  * @const
  */
-puppet.DIRECTORY_URL_ = puppet.BOOTSTRAP_.DIRECTORY_URL;
+puppet.DIRECTORY_URL_ = window['PUPPET_DIRECTORY_URL'] || (function() {
+  // Find the src of the script tag that includes puppet binary.
+  // Throw an assertion error if there is more than one.
+  var puppetDir = null;
+  goog.array.forEach(document.getElementsByTagName('script'), function(s) {
+    var src = s.src;
+    var filenameIndex = src.lastIndexOf('/') + 1;
+    var filename = src.substring(filenameIndex);
+    if (filename == 'puppet.js' || filename == 'puppet-bundle.js') {
+      var dir = filenameIndex > 0 ? src.substring(0, filenameIndex) : './';
+      if (!!puppetDir) {
+        throw Error('Malformed Puppet Test\n' +
+            'Test contains more than one puppet base directory:\n' +
+            puppetDir + '\nand\n' + dir);
+      }
+      puppetDir = dir;
+    }
+  });
+  if (!puppetDir) {
+    throw Error('Puppet is not used by test.');
+  }
+  return puppetDir;
+})();
 
 /**
  * Evaluates the JavaScript synchronously from the specified relative server
@@ -119,8 +196,31 @@ puppet.DIRECTORY_URL_ = puppet.BOOTSTRAP_.DIRECTORY_URL;
  * @param {string} path Relative path to the JavaScript file.
  * @return {boolean} Whether a non-empty JavaScript file was found.
  */
-puppet.include = puppet.BOOTSTRAP_.include;
+puppet.include = (function() {
+  // Set of included JS files, to ensure none is included more than once.
+  var includes = {};
 
+  // Set the puppet.include function to the following closure.
+  function includer(path) {
+    // If already included, return.
+    if (path in includes) {
+      return true;
+    }
+    // Otherwise, request that absolute path to the file.
+    var response = puppet.request(puppet.DIRECTORY_URL_ + path);
+    if (!response) {
+      return false;
+    }
+    // Make a script tag to include it and mark it as included.
+    var script = document.createElement('script');
+    script.text = response;
+    // Do not use 'head' or 'body' elements, which may not exist yet.
+    document.documentElement.firstChild.appendChild(script);
+    includes[path] = null;
+    return true;
+  }
+  return includer;
+})();
 
 //
 // Puppet Layout & UI
@@ -136,14 +236,16 @@ puppet.include = puppet.BOOTSTRAP_.include;
 puppet.BLANK_PAGE_URL_ = puppet.DIRECTORY_URL_ + 'blank.htm';
 
 /**
- * Iframe for the content document being tested.
- * It is added to the DOM by puppet.initialize_.
+ * Returns a relative url to the test file being run. E.g., if the window
+ * location is "http://www.google.com/tests/mytest.html?time=100#a", the test
+ * url would be "/tests/mytest.html?time=100#a".
  *
- * @const
- * @type {!Element}
- * @private
+ * @return {string} Relative url to the test.
  */
-puppet.IFRAME_ = document.createElement('iframe');
+puppet.testUrl = function() {
+  var loc = window.location;
+  return loc.pathname + loc.search + loc.hash;
+};
 
 /**
  * Gets the content window being tested.
@@ -151,8 +253,7 @@ puppet.IFRAME_ = document.createElement('iframe');
  * @return {!Window} Content window.
  */
 puppet.window = function() {
-  return /** @type {!Window} */ (goog.dom.getFrameContentWindow(
-      /** @type {!HTMLIFrameElement} */ (puppet.IFRAME_)));
+  return bot.getWindow();
 };
 
 /**
@@ -161,7 +262,23 @@ puppet.window = function() {
  * @return {!Document} Content document.
  */
 puppet.document = function() {
-  return goog.dom.getFrameContentDocument(puppet.IFRAME_);
+  return bot.getDocument();
+};
+
+/**
+ * Gets the frameElement.
+ *
+ * @return {Element} frFrame element.
+ * @private
+ */
+puppet.getFrame_ = function() {
+  try {
+    // On IE, accessing the frameElement of a popup window results in a "No Such
+    // interface" exception.
+    return bot.getWindow().frameElement;
+  } catch (e) {
+    return null;
+  }
 };
 
 /**
@@ -180,6 +297,16 @@ puppet.location = function() {
  * @private
  */
 puppet.report_ = 'Puppet Report Log:\n';
+
+/**
+ * Test results for each test that was run. The test name is always added
+ * as the key in the map, and the array of strings is an optional list
+ * of failure messages. If the array is empty, the test passed. Otherwise,
+ * the test failed.
+ *
+ * @private {!Object.<string, !Array.<string>>}
+ */
+puppet.resultsByName_ = {};
 
 /**
  * The Puppet console including the menu and log.
@@ -202,25 +329,25 @@ puppet.buildMenu_ = function() {
   var pauseItem = {
     text: 'pause',
     title: 'Pause execution and wait for stepping',
-    disabled: puppet.PARAMS.step,
+    disabled: puppet.state_.isDebugMode(),
     onclick: function() {
-      puppet.PARAMS.step = true;
+      puppet.pause_();
       continueItem.disabled = pauseItem.disabled;
       pauseItem.disabled = !pauseItem.disabled;
     }};
   var continueItem = {
     text: 'continue',
     title: 'Continue execution through the rest of commands',
-    disabled: !puppet.PARAMS.step,
+    disabled: !puppet.state_.isDebugMode(),
     onclick: function() {
-      puppet.PARAMS.step = false;
+      puppet.continue_();
       continueItem.disabled = pauseItem.disabled;
       pauseItem.disabled = !pauseItem.disabled;
     }};
   var stepItem = {
     text: 'step',
     title: 'Step through the next command and pause execution, ?step',
-    href: 'javascript:puppet.step(1)'};
+    onclick: puppet.step_};
   var cmdsItem = {
     text: 'cmds',
     title: 'Pause at the i-th numbers of commands, ?cmds=1,3',
@@ -230,15 +357,11 @@ puppet.buildMenu_ = function() {
     title: 'Pause at the i-th numbers of source code lines' +
         ', ?line=10,13',
     href: puppet.params.setUrlParam('lines', '10,13'),
-    disabled: !puppet.stacktrace.BROWSER_SUPPORTED};
+    disabled: !webdriver.stacktrace.BROWSER_SUPPORTED};
   var delayItem = {
     text: 'delay',
     title: 'Delay for 200 milliseconds between run() commands, ?delay=200',
     href: puppet.params.setUrlParam('delay', '200')};
-  var firebugItem = {
-    text: 'firebug',
-    title: 'Firebug lite for debugging, ?firebug',
-    href: 'javascript:puppet.firebug_()'};
   var verboseItem = {
     text: 'verbose',
     title: 'Run the test in verbose (debugging) mode',
@@ -272,7 +395,6 @@ puppet.buildMenu_ = function() {
     cmdsItem,
     linesItem,
     delayItem,
-    firebugItem,
     verboseItem,
     toggleLogItem,
     sourceItem
@@ -297,67 +419,116 @@ puppet.initialize_ = function() {
   // Do not initialize if the Javascript unit test runner or Puppet
   // multi-test runner is present. Check during window.onload (when
   // puppet.initialize_ is called) to allow a late definition of
-  // window.puppet.runner.
-  if (window.puppet.runner) {
+  // window['puppet']runner.
+  if (window['puppet'].runner) {
     return;
   }
-  var testName = puppet.name().substr(puppet.name().lastIndexOf('/') + 1)
-      .replace('.html', '');
-  document.title = testName + ' - Puppet test: ' + puppet.name();
+  document.title = puppet.testUrl();
   // To signal the test harness that the test is complete.
   document.body.id = 'puppet';
   document.body.style.margin = '0';
-  if (puppet.userAgent.isFirefox()) {
-    puppet.control_ = document.createElement('iframe');
-    puppet.control_.style.display = 'none';
-    puppet.addOnLoad_(puppet.control_, puppet.start_);
-    document.body.appendChild(puppet.control_);
-  } else {
-    puppet.start_();
+
+  function styleFullSize(elem) {
+    var style = elem.style;
+    style.height = '100%';
+    style.minHeight = '100%';
+    style.border = '0';
+    style.margin = '0';
+    style.padding = '0';
   }
 
-  // Create table and content.
+  // Preserve Puppet's legacy Quirks Mode behavior.
+  if (goog.dom.isCss1CompatMode()) {
+    styleFullSize(document.documentElement);
+    styleFullSize(document.body);
+  }
+
+  // Create table, row, and cell to hold the iframe.
   var table = document.createElement(goog.dom.TagName.TABLE);
-  table.style.height = '100%';
-  table.style.width = '100%';
-  table.style.border = '0';
   table.cellPadding = '0';
   table.cellSpacing = '0';
+  styleFullSize(table);
+  table.style.width = '100%';
   var contentRow = table.insertRow(-1);
-  contentRow.style.height = '100%';
-  contentRow.insertCell(-1).appendChild(puppet.IFRAME_);
+  styleFullSize(contentRow);
+  var contentCell = contentRow.insertCell(-1);
 
-  puppet.IFRAME_.id = 'content';
-  puppet.IFRAME_.src = puppet.BLANK_PAGE_URL_;
-  puppet.IFRAME_.frameBorder = '0';
-  puppet.IFRAME_.marginWidth = '0';
-  puppet.IFRAME_.marginHeight = '0';
-  puppet.IFRAME_.height = '100%';
-  puppet.IFRAME_.width = puppet.PARAMS.width;
+  // Create the Puppet iframe.
+  var puppetIframe = document.createElement('iframe');
+  var iframeOrContainer = puppetIframe;
+  // TODO(user): See if iPhone needs similar logic.
+  if (puppet.userAgent.isIPad()) {
+    var iframeDiv = document.createElement('div');
+    styleFullSize(iframeDiv);
+    iframeDiv.style.overflow = 'auto';
+    iframeDiv.style.WebkitOverflowScrolling = 'touch';
+    iframeDiv.appendChild(puppetIframe);
+    iframeOrContainer = iframeDiv;
+  }
 
-  // Initialize the iframe immediately (in the capture phase) on load.
-  // (It may already have been initialized by the application under test.)
-  goog.events.listen(puppet.IFRAME_, 'load', function() {
+  contentCell.appendChild(iframeOrContainer);
+  puppetIframe.id = 'content';
+  puppetIframe.src = puppet.BLANK_PAGE_URL_;
+  puppetIframe.frameBorder = '0';
+  puppetIframe.marginWidth = '0';
+  puppetIframe.marginHeight = '0';
+  puppetIframe.height = '100%';
+
+  // Preserve Puppet's legacy Quirks Mode behavior.
+  if (goog.dom.isCss1CompatMode()) {
+    styleFullSize(puppetIframe);
+  }
+
+  puppetIframe.width = puppet.PARAMS.width;
+  puppetIframe.style.width = puppet.PARAMS.width;
+
+  // For the first Puppet iframe load, call puppet.initWindow and then start
+  // command execution.
+  goog.events.listenOnce(puppetIframe, 'load', function() {
+    puppet.initWindow();
+
+    window.setTimeout(function() {
+      // If jsunit testing is occuring, then do not execute anything.
+      if (window['goog'] && window['goog']['testing'] &&
+          window['goog']['testing']['jsunit']) {
+        return;
+      }
+      // The canonical way to enqueue Puppet commands was to override
+      // window.onload. If window.onload has not been overriden, then support
+      // xUnit style tests.
+      if (window.onload) {
+        puppet.executor_.start(function(opt_errorMsg) {
+          puppet.done_(opt_errorMsg);
+        });
+      } else {
+        puppet.testCase_ = new puppet.TestCase(puppet.executor_, puppet.done_);
+        puppet.testCase_.run();
+      }
+    }, 0);
+  }, true);
+
+  // For subsequent Puppet iframe loads, we potentially need to call
+  // puppet.initWindow().
+  goog.events.listen(puppetIframe, 'load', function() {
     // Opera doesn't fire the unload event on the Puppet iframe, so we don't
     // know for sure whether the window has been initialized. So we explicitly
     // set windowInitialized_ to false, so that the full initialization will
     // happen. This means the window may be initialized multiple time in Opera,
     // which is unnecessary, but should be a noop in terms of visible behavior.
-    if (puppet.userAgent.isOpera()) {
-      puppet.windowInitialized_ = false;
+    if (puppet.windowInitializedId_ || puppet.userAgent.isOpera()) {
+      puppet.initWindow();
     }
-    puppet.initWindow();
   }, true);
-  // Do not run commands until the iframe is loaded.
-  puppet.waitForLoad_();
-
   // If fullpage, always hide the log.
   // Otherwise, build the menu and hide the log only if requested.
+  var menuRow = null;
   if (puppet.PARAMS.fullpage) {
     puppet.console_.toggleLog(false);
   } else {
     puppet.buildMenu_();
-    var menuCell = table.insertRow(-1).insertCell(-1);
+    menuRow = table.insertRow(-1);
+    menuRow.style.height = 0;
+    var menuCell = menuRow.insertCell(-1);
     goog.array.forEach(puppet.console_.getMenuElements(), function(elem) {
       menuCell.appendChild(elem);
     });
@@ -367,16 +538,34 @@ puppet.initialize_ = function() {
   }
 
   var logElem = puppet.console_.getLogElement();
-  table.insertRow(-1).insertCell(-1).appendChild(logElem);
+  var logRow = table.insertRow(-1);
+  logRow.style.height = 0;
+  logRow.insertCell(-1).appendChild(logElem);
   document.body.appendChild(table);
 
+  // The iframe won't consume 100% of the row in IE or Opera standards mode,
+  // so we need to set its height explicitly.
+  if ((goog.userAgent.IE || goog.userAgent.OPERA) &&
+      goog.dom.isCss1CompatMode()) {
+    var maxHeight = document.documentElement.clientHeight;
+    var menuHeight = menuRow ? menuRow.offsetHeight : 0;
+    var logHeight = logRow.offsetHeight;
+    var iframeHeight = (maxHeight - menuHeight - logHeight - 4) + 'px';
+    contentRow.style.height = iframeHeight;
+    contentCell.style.height = iframeHeight;
+  }
+
+  // Make the atoms consider the Puppet iframe to be the "top" window.
+  bot.setWindow(/** @type {!Window} */ (goog.dom.getFrameContentWindow(
+      /** @type {!HTMLIFrameElement} */ (puppetIframe))));
+
   // In case the test failed by now due to a syntax error, quit here.
-  if (!puppet.batch_) {
+  if (puppet.state_.isFinished()) {
     return;
   }
 
-  puppet.echo('Running: <a href=/' + puppet.name() +
-      ' target=_blank>' + puppet.name() + '</a> ' +
+  puppet.echo('Running: <a href=' + puppet.testUrl() + ' target=_blank>' +
+      puppet.testUrl() + '</a> ' +
       (puppet.PARAMS.verbose ? (new Date).toDateString() : ''));
 
   // Fix the width to the current width, so that horizontal overflow
@@ -385,7 +574,7 @@ puppet.initialize_ = function() {
 
   // Configuring test to fail after the whole test timeout is reached,
   // unless we're in stepping mode.
-  if (puppet.PARAMS.time > 0 && !puppet.PARAMS.step) {
+  if (puppet.PARAMS.time > 0 && !puppet.state_.isDebugMode()) {
     window.setTimeout(function() {
       puppet.done_('Test failed: did not complete within ' +
           puppet.PARAMS.time + ' seconds.');
@@ -393,19 +582,20 @@ puppet.initialize_ = function() {
   }
 
   puppet.updateStatus_(puppet.TestStatus.LOADED);
-  puppet.ready_ = true;
-};
 
-/**
- * Loads Firebug lite.
- *
- * @private
- */
-puppet.firebug_ = function() {
-  if (!window['Firebug']) {
-    var script = document.createElement('SCRIPT');
-    script.setAttribute('src', 'http://getfirebug.com/firebug-lite.js');
-    document.body.appendChild(script);
+  // Log an information message for IE if the userAgent version does not match
+  // the document mode and warn the user. Starting in IE 10, one can only
+  // intentionally cause a mismatch in browser version and document mode, so no
+  // warning is given.
+  if (goog.userAgent.IE) {
+    var majorVersion = Math.floor(Number(goog.userAgent.VERSION));
+    if (majorVersion < 10 && !bot.userAgent.isEngineVersion(majorVersion)) {
+      puppet.echo('Warning: the IE document mode (' +
+          goog.userAgent.DOCUMENT_MODE + ') does not match the major browser ' +
+          'version (' + majorVersion + '). If this is not intentional, ' +
+          'consider adding a &lt;!DOCTYPE html&gt; declaration to the top of ' +
+          'the test file to ensure they match');
+    }
   }
 };
 
@@ -465,8 +655,9 @@ puppet.getStatus = function() {
 puppet.runner_ = (function() {
   // Check for the runner inside a try-catch to avoid security exceptions.
   try {
-    if (self.opener && self.opener.puppet && self.opener.puppet.runner) {
-      return self.opener.puppet.runner;
+    if (self.opener && self.opener['puppet'] &&
+        self.opener['puppet']['runner']) {
+      return self.opener['puppet']['runner'];
     }
   } catch (ignore) {}
 
@@ -483,13 +674,13 @@ puppet.updateStatus_ = function(status) {
   puppet.testStatus_ = status;
 
   // Display timestamps for the message status of the multitest runner.
-  var message = status.message + ' #' + puppet.time_();
+  var message = status.message + ' #' + puppet.logging.time();
   puppet.echo('== ' + message);
   puppet.console_.getLogElement().style.backgroundColor = status.color;
 
   // Notify the multi-runner, if any.
   if (puppet.runner_) {
-    puppet.runner_.notifyStatus(window, status);
+    puppet.runner_['notifyStatus'](window, status);
   }
 };
 
@@ -509,7 +700,6 @@ puppet.updateStatus_ = function(status) {
  *   hidelog: boolean,
  *   hidemenu: boolean,
  *   lines: !Array.<string>,
- *   noflash: boolean,
  *   step: boolean,
  *   time: number,
  *   timeout: number,
@@ -537,8 +727,6 @@ puppet.PARAMS = {
   // e.g. ?lines=3,6 to pause at the 3rd and the 6th lines.
   // Only supported by browsers that support stack traces.
   lines: puppet.params.declareMultistring('lines', []),
-  // Whether to turn off the red flash.
-  noflash: puppet.params.declareBoolean('noflash'),
   // Whether the test begins paused for stepping through and debugging.
   step: puppet.params.declareBoolean('step'),
   // The number of seconds before the whole test times out.
@@ -546,7 +734,9 @@ puppet.PARAMS = {
   time: puppet.params.declareNumber('time', 600),
   // The number of seconds before a command times out.
   // Zero means there is no limit; perhaps useful for debugging.
-  timeout: puppet.params.declareNumber('timeout', 30),
+  // TODO(user): Remove conditional increase for ie9
+  timeout: puppet.params.declareNumber('timeout',
+      goog.userAgent.IE && bot.userAgent.isProductVersion(9) ? 60 : 30),
   // Whether to show extra debug output when the test runs.
   verbose: puppet.params.declareBoolean('verbose'),
   // Width of the Puppet iframe. Defaults to '100%'.
@@ -559,19 +749,10 @@ puppet.PARAMS = {
 //
 
 /**
- * Whether execution is ready for the next command.
- *
- * @type {boolean}
- * @private
+ * Async id for Puppet iframe loads.
+ * @private {?number}
  */
-puppet.ready_ = false;
-
-/**
- * Whether the window in the test iframe has been set up.
- * @type {boolean}
- * @private
- */
-puppet.windowInitialized_ = false;
+puppet.windowInitializedId_ = null;
 
 /**
  * Type definition of a call to be executed. It includes the command to be
@@ -588,23 +769,36 @@ puppet.windowInitialized_ = false;
 puppet.QueuedCall_;
 
 /**
- * Stack of queues with calls scheduled for execution.
- * @type {!puppet.QueueStack}
- * @private
+ * The breakpoint id.
+ *
+ * @private {?number}
  */
-puppet.queueStack_ = new puppet.QueueStack();
+puppet.pausedId_ = null;
 
 /**
- * The number of commands that have been queued via run() thus far,
- * not including pauses. This is used by run() to match commands
- * against the commands_ parameter to determine which commands to
- * precede with pauses. It is also used by puppet.start_ to test
- * whether any commands have been queued yet.
- *
+ * An command that waits indefinitely. This is used to create a breakpoint.
  * @private
- * @type {number}
  */
-puppet.commandIndex_ = 0;
+puppet.pause_ = function() {
+  if (!puppet.executor_.isExecuting()) {
+   return;
+  }
+  var originalTimeoutMs = puppet.executor_.getCommandTimeoutMs();
+  puppet.executor_.setCommandTimeoutMs(0);
+  puppet.pauseId_ = puppet.executor_.wait();
+  puppet.executor_.setCommandTimeoutMs(originalTimeoutMs);
+  puppet.state_.enterDebugMode();
+};
+
+/**
+ * Resumes execution.
+ * @private
+ */
+puppet.continue_ = function() {
+  puppet.executor_.notify(puppet.pauseId_);
+  puppet.pausedId_ = null;
+  puppet.state_.leaveDebugMode();
+};
 
 /**
  * Queues a command to be executed.
@@ -623,66 +817,125 @@ puppet.commandIndex_ = 0;
  */
 function run(command, var_args) {
   puppet.assert(goog.isFunction(command), 'command not a function: ' + command);
-  command = (/** @type {function(...) : *} */ command); // For the compiler.
+  command = /** @type {function(...[?]) : *} */ (command); // For the compiler.
   var caller = puppet.currentSourceCallSite_();
+  var args = goog.array.slice(arguments, 1);
+  var commandIndex = puppet.state_.getCommandIndex();
+  function runCommand() {
+    puppet.elements.clearCache();
+    var commandResult = command.apply(null, args) !== false;
+    puppet.logging.maybeLogDebugMessages(commandResult);
+    if (commandResult) {
+      var isBreakpoint = caller.line &&
+          goog.array.contains(puppet.PARAMS.lines, String(caller.line)) ||
+          goog.array.contains(puppet.PARAMS.cmds, String(commandIndex));
+      if (puppet.state_.isDebugMode() || isBreakpoint) {
+        puppet.pause_();
+      }
+      return true;
+    } else {
+      return false;
+    }
+  }
+  // Build the call info to be printed.
+  var callInfo = [];
 
-  // Insert pause based on ?cmds or ?lines. Do not use the length of
-  // puppet.queue_ to check against ?cmds because the added pause
-  // commands change the numbers of functions in puppet.queue_.
-  if (caller.line &&
-      goog.array.contains(puppet.PARAMS.lines, String(caller.line)) ||
-      goog.array.contains(puppet.PARAMS.cmds, String(puppet.commandIndex_))) {
-    puppet.queueStack_.enqueue({
-      // TODO(user): make a public pause() command.
-      command: function() { puppet.PARAMS.step = true },
-      args: [],
-      file: null,
-      line: caller.line,
-      // TODO(user): specify the URL parameter and value of the call site.
-      code: 'pause() from URL ?cmds or ?lines'
-    });
+  // Print the filename if it has changed.
+  if (caller.file && caller.file != puppet.lastCallFile_) {
+    puppet.lastCallFile_ = caller.file;
+    callInfo.push('-- in ' + caller.file + ':');
   }
 
-  // Enqueue the command passed to run.
-  puppet.queueStack_.enqueue({
-    command: command,
-    args: goog.array.slice(arguments, 1),
-    file: caller.file,
-    line: caller.line,
-    code: caller.code
-  });
-  puppet.commandIndex_++;
+  // Print the source code if we have it and, if not, print the evaluation
+  // of the call. Print both if the verbose parameter is set.
+  var line = caller.line ? ('line ' + caller.line) : '';
+  var prefix = line + ': ';
+  if (caller.code) {
+    callInfo.push(prefix + goog.string.htmlEscape(caller.code));
+    prefix = goog.string.repeat(' ', line.length) + '> ';
+  }
+  if (!caller.code || puppet.PARAMS.verbose) {
+    callInfo.push(prefix + puppet.logging.toString(command) +
+        '(' + puppet.logging.toString(args) + ')');
+  }
+
+  var commandString = callInfo.join('<br>');
+  runCommand.toString = function() {
+    return commandString;
+  };
+
+  puppet.executor_.enqueue(runCommand);
+  puppet.state_.incrementCommandIndex();
 }
 
 /**
- * Default value of puppet.waitInterval_.
+ * Gets the command timeout.
+ *
+ * @return {number} Seconds to wait before command timeout.
+ */
+puppet.getCommandTimeoutSecs = function() {
+  return puppet.executor_.getCommandTimeoutMs() / 1000;
+};
+
+/**
+ * Sets the command timeout.
+ *
+ * @param {number} timeoutSecs Seconds to wait before command timeout.
+ */
+puppet.setCommandTimeoutSecs = function(timeoutSecs) {
+  puppet.executor_.setCommandTimeoutMs(timeoutSecs * 1000);
+};
+
+/**
+ * Sets the command delay.
+ *
+ * @param {number} delayMs Milliseconds to wait before command execution.
+ */
+puppet.setDelayMs = function(delayMs) {
+  puppet.executor_.setDelayMs(delayMs);
+};
+
+/**
+ * Default milliseconds to wait before retrying a failed command.
  *
  * @const
- * @private
- * @type {number}
+ * @private {number}
  */
-puppet.DEFAULT_WAIT_INTERVAL_ = 200;
+puppet.DEFAULT_RETRY_MS_ = 200;
 
 /**
- * The number of milliseconds to wait for stuff to happen, used for a
- * variety of purposes in Puppet, including the time to wait before
- * retrying failed commands.
+ * Sets the command retry delay. Defaults to 200 milliseconds in case of a value
+ * less than or equal to zero.
  *
- * @private
- * @type {number}
+ * @param {number} retryMs Milliseconds to wait before retrying a failed
+ *     command.
  */
-puppet.waitInterval_ = puppet.DEFAULT_WAIT_INTERVAL_;
-
-/**
- * Sets the value of puppet.waitInterval_. If the argument is not
- * positive, resets it to DEFAULT_WAIT_INTERVAL.
- *
- * @param {number} waitInterval Number of milliseconds to wait.
- */
-puppet.setWaitInterval = function(waitInterval) {
-  puppet.waitInterval_ = waitInterval > 0 ? waitInterval :
-      puppet.DEFAULT_WAIT_INTERVAL_;
+puppet.setRetryMs = function(retryMs) {
+  puppet.executor_.setRetryMs(retryMs > 0 ? retryMs : puppet.DEFAULT_RETRY_MS_);
 };
+
+/**
+ * Puppet execution state.
+ *
+ * @private {!puppet.State}
+ */
+puppet.state_ = new puppet.State(puppet.PARAMS.step);
+
+/**
+ * The executor objects controls command execution.
+ *
+ * @private {!puppet.Executor}
+ */
+puppet.executor_ = new puppet.Executor(puppet.PARAMS.delay,
+    puppet.DEFAULT_RETRY_MS_, puppet.PARAMS.timeout * 1000,
+    puppet.PARAMS.verbose);
+
+/**
+ * The test case object that is used for xUnit style tests.
+ *
+ * @private {puppet.TestCase}
+ */
+puppet.testCase_ = null;
 
 /**
  * Name of the file where the last call was made.
@@ -692,198 +945,6 @@ puppet.setWaitInterval = function(waitInterval) {
  */
 puppet.lastCallFile_ = window.location.pathname.
     substr(window.location.pathname.lastIndexOf('\/') + 1);
-
-/**
- * Execute a queued call.
- *
- * @private
- * @param {?puppet.QueuedCall_} call Call to be executed, or null if
- *     no more calls in the queue.
- */
-puppet.execute_ = function(call) {
-  if (call) {
-    // Allow this call to execute its own runs before others.
-    puppet.queueStack_.pushQueue();
-
-    // Build the call info to be printed.
-    var callInfo = [];
-    // Print the filename if it has changed.
-    if (call.file && call.file != puppet.lastCallFile_) {
-      puppet.lastCallFile_ = call.file;
-      callInfo.push('-- in ' + call.file + ':');
-    }
-    // Print the source code if we have it.
-    if (call.code) {
-      var line = call.line ? 'line ' + call.line : '';
-      callInfo.push(line + ': ' + goog.string.htmlEscape(call.code));
-    }
-    // If we do not have the source code or if the verbose parameter is set,
-    // then we will also print the evaluation of the call.
-    if (!call.code || puppet.PARAMS.verbose) {
-      var line = call.line ? 'line ' + call.line : '';
-      callInfo.push(line + ': ' + puppet.logging.toString(call.command) +
-                    '(' + puppet.logging.toString(call.args) + ')');
-    }
-
-    // Print the call info.
-    puppet.echo(callInfo.join('<br>'));
-
-    var startTime = goog.now();
-    function echoTimingInfo(includeDuration) {
-      // Also print the time if the verbose parameter is set.
-      if (puppet.PARAMS.verbose) {
-        var timeString = 'time: ' + puppet.time_();
-        if (includeDuration) {
-          timeString += '; duration: ' + (goog.now() - startTime) + ' ms';
-        }
-        puppet.echo(timeString);
-      }
-    }
-
-    var timeoutId = null;
-    // Fail the test if the command does not succeed within the timeout.
-    var commandAsyncId;
-    if (puppet.PARAMS.timeout > 0) {
-      commandAsyncId = puppet.async.waitUntilTimeout(puppet.PARAMS.timeout,
-          'Command failed: no attempts passed for ' + puppet.PARAMS.timeout +
-          ' seconds.');
-    } else {
-      // Wait indefinitely.
-      commandAsyncId = puppet.async.wait();
-    }
-
-    // Make and execute a "retry function" that schedules the command to be
-    // retried until it does not return false or the test has ended.
-    var retryFunc = function() {
-      if (!puppet.batch_) {
-        return;
-      }
-      puppet.ready_ = (call.command.apply(null, call.args) !== false);
-      if (puppet.ready_) {
-        echoTimingInfo(true);
-        puppet.async.done(commandAsyncId);
-        puppet.setTimeout_(puppet.start_, puppet.PARAMS.delay);
-      } else {
-        puppet.setTimeout_(retryFunc, puppet.waitInterval_);
-      }
-      puppet.elemCache_ = {};
-      puppet.logging.maybeLogDebugMessages(puppet.ready_);
-    };
-    retryFunc();
-
-  } else {
-    // NOTE(user): use the timer in the main frame (instead of calling
-    // done() directly or use the timer in the control frame) so that
-    // firebug will block the time out during debugger's breakpoint to
-    // allow more puppet commands from run().
-    window.setTimeout(function() { puppet.done_(); }, 0);
-
-    // Wait for user to add new commands via run(), unless this
-    // test is run via the multi-test runner in which case no new
-    // commands should be taken.
-    //
-    // Note that:
-    // 1. To use debugger breakpoints in Firebug, puppet must
-    //   be continuously called below because new commands can be
-    //   added via stepping through run() commands.
-    // 2. To conserve thread resources in IE when using multi-test
-    //   runner, puppet.start_() must _not_ be called after a test is
-    //   done to avoid busy-waiting when a test window is not properly
-    //   closed.
-    if (!puppet.runner_) {
-      puppet.setTimeout_(puppet.start_, puppet.waitInterval_);
-    }
-  }
-};
-
-/**
- * Iframe for the control thread of testing; useful for Firebug's
- * debugger in Firefox.
- *
- * This is initialized by puppet.initialize_. It is not necessary for
- * browsers without Firebug's debugger, and can even be harmful. For
- * example, in Safari, calling XMLHttpRequest (as in puppet.request)
- * from the iframe's thread throws a permission error.
- *
- * @type {Element}
- * @private
- */
-puppet.control_ = null;
-
-/**
- * Sets timeout with the control iframe or the main window.
- *
- * TODO(user): Figure out if all window.setTimeout calls in this
- * file can be replaced with calls to puppet.setTimeout_.
- *
- * @param {function() : *} func Callback function.
- * @param {number} delay Delay in milliseconds.
- * @return {number} Timer id.
- * @private
- */
-puppet.setTimeout_ = function(func, delay) {
-  var win = puppet.control_ ? puppet.control_.contentWindow : window;
-  return win.setTimeout(func, delay);
-};
-
-/**
- * Initialization hooks to execute before the test begins.
- *
- * @type {Array.<function()>}
- * @private
- */
-puppet.initializers_ = [];
-
-/**
- * Adds an initializer to be executed before the test ends.
- *
- * @param {function()} initializer Initializer function.
- */
-puppet.addInitializer = function(initializer) {
-  puppet.initializers_.push(initializer);
-};
-
-
-/**
- * Finalization hooks to execute once the test ends.
- *
- * @type {!Array.<function(boolean)>}
- * @private
- */
-puppet.finalizers_ = [];
-
-/**
- * The last finalization hook to execute once the test ends.
- *
- * @type {?function(boolean)}
- * @private
- */
-puppet.lastFinalizer_ = null;
-
-/**
- * Adds a finalizer to be executed once the test ends. The finalizer
- * is given a boolean that indicates whether the test passed.
- *
- * @param {function(boolean)} finalizer Finalizer function.
- */
-puppet.addFinalizer = function(finalizer) {
-  puppet.finalizers_.push(finalizer);
-};
-
-/**
- * Sets the last finalizer to be executed once the test ends. The finalizer
- * is given a boolean that indicates whether the test passed.
- *
- * @param {function(boolean)} finalizer Finalizer function.
- */
-puppet.setLastFinalizer = function(finalizer) {
-  if (puppet.lastFinalizer_) {
-    throw 'puppet.lastFinalizer_ already defined. You can only set the last ' +
-        'finalizer once.';
-  }
-  puppet.lastFinalizer_ = finalizer;
-};
-
 
 //
 // Commands.
@@ -900,7 +961,7 @@ puppet.keyboard_ = new bot.Keyboard();
 /**
  * Returns the {@link bot.Keyboard} used by action commands.
  *
- * @return {!bot.Keyboard}
+ * @return {!bot.Keyboard} Keyboard used by Puppet.
  */
 puppet.keyboard = function() {
   return puppet.keyboard_;
@@ -909,15 +970,15 @@ puppet.keyboard = function() {
 /**
  * The synthetic mouse used by action commands.
  *
- * @type {!bot.Mouse}
+ * @type {!puppet.Mouse}
  * @private
  */
-puppet.mouse_ = new bot.Mouse();
+puppet.mouse_ = new puppet.Mouse();
 
 /**
- * Returns the {@link bot.Mouse} used by action commands.
+ * Returns the {@link puppet.Mouse} used by action commands.
  *
- * @return {!bot.Mouse}
+ * @return {!puppet.Mouse} Mouse used by Puppet.
  */
 puppet.mouse = function() {
   return puppet.mouse_;
@@ -926,15 +987,15 @@ puppet.mouse = function() {
 /**
  * The synthetic touchscreen used by action commands.
  *
- * @type {!bot.Touchscreen}
+ * @type {!puppet.Touchscreen}
  * @private
  */
-puppet.touchscreen_ = new bot.Touchscreen();
+puppet.touchscreen_ = new puppet.Touchscreen();
 
 /**
- * Returns the {@link bot.Touchscreen} used by action commands.
+ * Returns the {@link puppet.Touchscreen} used by action commands.
  *
- * @return {!bot.Touchscreen}
+ * @return {!puppet.Touchscreen} Touchscreen used by Puppet.
  */
 puppet.touchscreen = function() {
   return puppet.touchscreen_;
@@ -1015,19 +1076,19 @@ function load(urlOrCommand) {
     var currRelativeNoHash = loc.pathname + loc.search;
     var newRelativeNoHash = goog.uri.utils.removeFragment(relativeUrl);
     if (currRelativeNoHash == newRelativeNoHash) {
-      puppet.waitForLoad_(function() {
-        puppet.waitForLoad_();
+      waitForLoad(function() {
+        waitForLoad();
         puppet.location().replace(relativeUrl);
       });
       loc.href = puppet.BLANK_PAGE_URL_;
     } else {
-      puppet.waitForLoad_();
+      waitForLoad();
       loc.href = relativeUrl;
     }
   } else {
     puppet.assert(typeof urlOrCommand == 'function');
     return function(var_args) {
-      puppet.waitForLoad_();
+      waitForLoad();
       var commandReturn = urlOrCommand.apply(null, arguments);
       if (commandReturn) {
         puppet.echo('-- waiting for a new page to load ...');
@@ -1035,6 +1096,23 @@ function load(urlOrCommand) {
       return commandReturn;
     };
   }
+
+  function waitForLoad(opt_fn) {
+    var asyncLoadId = puppet.executor_.wait('Page load failed: did not' +
+        ' complete within ' + puppet.executor_.getCommandTimeoutMs() +
+        ' seconds. The javascript console may have more details.');
+
+    puppet.addOnLoad_(puppet.getFrame_() || bot.getWindow(), function() {
+      // After the window has loaded, wait another cycle for the page to enter
+      // the browser history, so tests that use the browser history work.
+      window.setTimeout(function() {
+        if (opt_fn) {
+          opt_fn();
+        }
+        puppet.executor_.notify(asyncLoadId);
+      }, 0);
+    });
+  };
 }
 
 /**
@@ -1064,6 +1142,17 @@ function back(opt_numPages) {
 function forward(opt_numPages) {
   bot.window.forward(opt_numPages);
 }
+
+/**
+ * Switches the window under test.
+ *
+ * @param {!Window} win The new window for command execution.
+ */
+var switchto = function(win) {
+  puppet.elements.clearCache();
+  bot.setWindow(win);
+  puppet.initWindow();
+};
 
 /**
  * A helper function for defining a Puppet command. It accepts two arguments:
@@ -1151,10 +1240,11 @@ var opacity = puppet.command(false, function(elem, desc, value, opt_max) {
 puppet.style = function(elem, key) {
   // If looking up the background color and the flash is on, turn the flash off
   // first, but remember to turn it on after getting the effective style.
-  var flashOnAfter = key == 'background-color' && puppet.flash_(elem, false);
+  var flashOnAfter = key == 'background-color' &&
+      puppet.elements.flash(elem, false);
   var value = bot.dom.getEffectiveStyle(elem, key);
   if (flashOnAfter) {
-    puppet.flash_(elem, true);
+    puppet.elements.flash(elem, true);
   }
   return value;
 };
@@ -1177,65 +1267,84 @@ var style = puppet.command(false, function(elem, desc, key, value) {
 });
 
 /**
- * Returns true iff the element is present and has the given attribute
- * key/value pair.
- *
- * Since the name of the attribute specifying the element's class is
- * either called 'class' or 'className', depending on the browser, use
- * clazz() instead of this function for testing the value of the class
- * with cross-browser compatibility.
+ * Returns whether the element is present, has an attribute with the given name,
+ * and if opt_value is given, whether it matches the actual attribute value. If
+ * the value is a RegExp, tests the actual value matches the RegExp pattern.
  *
  * @param {string|!Element} pathOrElem XPath or element.
- * @param {string} key Key of the attribute.
- * @param {string|!RegExp} value Value of the attribute.
+ * @param {string} name Name of the attribute.
+ * @param {(string|!RegExp)=} opt_value Value of the attribute.
  * @return {boolean} Whether the element has the attribute.
  */
-var attribute = puppet.command(false, function(elem, desc, key, value) {
-  var a = puppet.attribute(elem, key);
-  var b = goog.isDefAndNotNull(a) && puppet.matches(a, value);
-  puppet.debug(desc + ' has ' + key + ' attribute value (' + a + ') ' +
-               (b ? '' : 'not ') + 'matching expectation (' + value + ')');
-  return b;
+var attribute = puppet.command(false, function(elem, desc, name, opt_value) {
+  var a = puppet.attribute(elem, name);
+  if (goog.isNull(a)) {
+    puppet.debug(desc + ' does not have ' + name + ' attribute');
+    return false;
+  } else if (!goog.isDef(opt_value)) {
+    puppet.debug(desc + ' has ' + name + ' attribute');
+    return true;
+  } else {
+    var b = puppet.matches(a, opt_value);
+    puppet.debug(desc + ' has ' + name + ' attribute value (' + a + ') ' +
+        (b ? '' : 'not ') + 'matching expectation (' + opt_value + ')');
+    return b;
+  }
 });
 
 /**
- * Returns the attribute value for the given attribute key, or null
- * if the element does not have that attribute.
+ * Returns the value for the attribute with the given name, or null if the
+ * element does not have an attribute with that name.
  *
  * @param {!Element} elem Element.
- * @param {string} key Key of the attribute.
+ * @param {string} name Name of the attribute.
  * @return {?string} The attribute value.
  */
-puppet.attribute = function(elem, key) {
-  var attr = bot.dom.getAttribute(elem, key);
-  return goog.isNull(attr) ? null : '' + attr;
+puppet.attribute = function(elem, name) {
+  return bot.dom.getAttribute(elem, name);
 };
 
 /**
- * Returns true iff the element is present and has the given property
- * key/value pair.
- *
- * Since the name of the property specifying the element's inner text
- * is either called 'innerText' or 'textContent', depending on the
- * browser, use text() instead of this function for testing the value
- * of the text with cross-browser compatibility.
+ * Returns whether the element is present, has a property with the given name,
+ * and if opt_value is given, whether it matches the actual property value. If
+ * the value is a RegExp, tests the actual value matches the RegExp pattern.
  *
  * @param {string|!Element} pathOrElem XPath or element.
- * @param {string} key Key of the property.
- * @param {string|!RegExp} value Value of the property.
+ * @param {string} name Name of the property.
+ * @param {*=} opt_value Value of the property.
  * @return {boolean} Whether the element has the property.
  */
-var property = puppet.command(false, function(elem, desc, key, value) {
-  var p = elem[key];
-  var b = goog.isDefAndNotNull(p) && puppet.matches(p, value);
-  puppet.debug(desc + ' has ' + key + ' property value (' + p + ') ' +
-               (b ? '' : 'not ') + 'matching expectation (' + value + ')');
-  return b;
+var property = puppet.command(false, function(elem, desc, name, opt_value) {
+  var p = puppet.property(elem, name);
+  if (!goog.isDef(p)) {
+    puppet.debug(desc + ' does not have ' + name + ' property');
+    return false;
+  } else if (!goog.isDef(opt_value)) {
+    puppet.debug(desc + ' has ' + name + ' property');
+    return true;
+  } else {
+    var b = opt_value instanceof RegExp ? opt_value.test(String(p)) :
+        opt_value === p;
+    puppet.debug(desc + ' has ' + name + ' property value (' + p + ') ' +
+        (b ? '' : 'not ') + 'matching expectation (' + opt_value + ')');
+    return b;
+  }
 });
 
 /**
- * Returns the element's visible text, the text of the element as the user
- * would see it in the browser.
+ * Returns the value for the given property name, undefined if the element does
+ * not have a property with that name.
+ *
+ * @param {!Element} elem Element.
+ * @param {string} name Name of the property.
+ * @return {*} The property value.
+ */
+puppet.property = function(elem, name) {
+  return bot.dom.getProperty(elem, name);
+};
+
+/**
+ * Returns the element's visible text as the user would see it in the browser.
  *
  * @param {!Element} elem Element.
  * @return {string} The element's text.
@@ -1316,7 +1425,7 @@ var clear = puppet.command(true, function(elem, desc) {
   } else if (bot.dom.isElement(elem, goog.dom.TagName.INPUT) &&
              elem.type.toLowerCase() == 'checkbox') {
     if (bot.dom.isSelected(elem)) {
-      bot.action.click(elem, null, puppet.mouse_);
+      bot.action.click(elem, null, puppet.mouse_.getBotMouse());
     }
   } else {
     puppet.logging.error('Element cannot be cleared: ' +
@@ -1396,8 +1505,50 @@ var movemouse = puppet.command(true, function(elem, desc, opt_x, opt_y) {
     puppet.logging.error('no movemouse on a mobile browser');
   }
   var coord = puppet.coordFromOptXY_(opt_x, opt_y);
-  bot.action.moveMouse(elem, coord, puppet.mouse_);
+  bot.action.moveMouse(elem, coord, puppet.mouse_.getBotMouse());
 });
+
+/**
+ * The click and drag commands will issue touch actions on mobile devices. This
+ * variable will force mouse actions instead of touch actions on mobile devices.
+ *
+ * @type {boolean}
+ * @private
+ */
+puppet.forceMouseActions_ = false;
+
+/**
+ * By default, the click and drag commands will issue touch actions (tap and
+ * swipe, respectively) when the test runs on a touch device. If mouse actions
+ * are desired for click and drag, even when on a touch device, call this
+ * function with true.
+ *
+ * @param {boolean} forceMouseActions Whether to always use mouse actions for
+ *     click and drag commands.
+ */
+puppet.setForceMouseActions = function(forceMouseActions) {
+  puppet.forceMouseActions_ = forceMouseActions;
+};
+
+/**
+ * Rewrite the target URL of an ancestor link or form to be relative.
+ *
+ * @param {!Element} elem Element.
+ * @private
+ */
+puppet.maybeRewriteTargetUrlOnSite_ = function(elem) {
+  var target = /**@type {Element}*/(goog.dom.getAncestor(elem, function(e) {
+    return bot.dom.isElement(e, goog.dom.TagName.A) ||
+           bot.dom.isElement(e, goog.dom.TagName.FORM);
+  }, true));
+
+  if (target && target.tagName == goog.dom.TagName.A && target.href) {
+    target.href = puppet.toRelativeUrl_(target.href, target);
+  } else if (target && target.tagName == goog.dom.TagName.FORM &&
+             target.action) {
+    target.action = puppet.toRelativeUrl_(target.action, target);
+  }
+};
 
 /**
  * Returns true iff the element is shown, and if it is clicks an element at the
@@ -1410,24 +1561,29 @@ var movemouse = puppet.command(true, function(elem, desc, opt_x, opt_y) {
  * @return {boolean} Whether the element is shown.
  */
 var click = puppet.command(true, function(elem, desc, opt_x, opt_y) {
-  // Rewrite the target URL of an ancestor link or form to be relative.
-  var target = /**@type {Element}*/(goog.dom.getAncestor(elem, function(e) {
-    return bot.dom.isElement(e, goog.dom.TagName.A) ||
-           bot.dom.isElement(e, goog.dom.TagName.FORM);
-  }, true));
-
-  if (target && target.tagName == goog.dom.TagName.A && target.href) {
-    target.href = puppet.toRelativeUrl_(target.href, target);
-  } else if (target && target.tagName == goog.dom.TagName.FORM &&
-             target.action) {
-    target.action = puppet.toRelativeUrl_(target.action, target);
-  }
+  puppet.maybeRewriteTargetUrlOnSite_(elem);
   var coord = puppet.coordFromOptXY_(opt_x, opt_y);
-  if (puppet.userAgent.isMobile()) {
-    bot.action.tap(elem, coord, puppet.touchscreen_);
+  if (puppet.userAgent.isMobile() && !puppet.forceMouseActions_) {
+    bot.action.tap(elem, coord, puppet.touchscreen_.getBotTouchscreen());
   } else {
-    bot.action.click(elem, coord, puppet.mouse_);
+    bot.action.click(elem, coord, puppet.mouse_.getBotMouse());
   }
+});
+
+/**
+ * Returns true iff the element is shown, and if it is taps an element at the
+ * optional x and y client coordinates, relative to the element. If this tap
+ * has a target URL, ensure the link is relative so it won't go off-site.
+ *
+ * @param {string|!Element} pathOrElem XPath or element to tap.
+ * @param {number=} opt_x The x coordinate relative to the element.
+ * @param {number=} opt_y The y coordinate relative to the element.
+ * @return {boolean} Whether the element is shown.
+ */
+var tap = puppet.command(true, function(elem, desc, opt_x, opt_y) {
+  puppet.maybeRewriteTargetUrlOnSite_(elem);
+  var coord = puppet.coordFromOptXY_(opt_x, opt_y);
+  bot.action.tap(elem, coord, puppet.touchscreen_.getBotTouchscreen());
 });
 
 /**
@@ -1444,7 +1600,7 @@ var rightclick = puppet.command(true, function(elem, desc, opt_x, opt_y) {
     puppet.logging.error('no rightclick on a mobile browser');
   }
   var coord = puppet.coordFromOptXY_(opt_x, opt_y);
-  bot.action.rightClick(elem, coord, puppet.mouse_);
+  bot.action.rightClick(elem, coord, puppet.mouse_.getBotMouse());
 });
 
 /**
@@ -1462,7 +1618,7 @@ var doubleclick = puppet.command(true, function(elem, desc, opt_x, opt_y) {
     bot.action.tap(elem, coord);
     bot.action.tap(elem, coord);
   } else {
-    bot.action.doubleClick(elem, coord, puppet.mouse_);
+    bot.action.doubleClick(elem, coord, puppet.mouse_.getBotMouse());
   }
 });
 
@@ -1484,7 +1640,7 @@ var scrollmouse = puppet.command(true,
         puppet.logging.error('no scrollmouse on a mobile browser');
       }
       var coord = puppet.coordFromOptXY_(opt_x, opt_y);
-      bot.action.scrollMouse(elem, ticks, coord, puppet.mouse_);
+      bot.action.scrollMouse(elem, ticks, coord, puppet.mouse_.getBotMouse());
     });
 
 /**
@@ -1556,7 +1712,7 @@ var mouse = puppet.command(true,
         }
       }
 
-      var clientPos = goog.style.getClientPosition(elem);
+      var clientRect = bot.dom.getClientRect(elem);
       var eventType;
       if (type == 'click') {
         eventType = bot.events.EventType.CLICK;
@@ -1583,8 +1739,8 @@ var mouse = puppet.command(true,
       }
 
       bot.events.fire(elem, eventType, {
-        clientX: clientPos.x + (opt_x || 0),
-        clientY: clientPos.y + (opt_y || 0),
+        clientX: clientRect.left + (opt_x || 0),
+        clientY: clientRect.top + (opt_y || 0),
         button: puppet.mouseButton_(type, opt_button || 0),
         altKey: false,
         ctrlKey: false,
@@ -1600,6 +1756,7 @@ var mouse = puppet.command(true,
  *
  * @param {!Element} elem Element.
  * @return {number} offset.
+ * @deprecated Use puppet.clientRect instead.
  */
 puppet.left = function(elem) {
   return elem.offsetParent ?
@@ -1611,10 +1768,28 @@ puppet.left = function(elem) {
  *
  * @param {!Element} elem Element.
  * @return {number} Offset from the top of the element.
+ * @deprecated Use puppet.clientRect instead.
  */
 puppet.top = function(elem) {
   return elem.offsetParent ?
       elem.offsetTop + puppet.top(elem.offsetParent) : elem.offsetTop;
+};
+
+/**
+ * Gets the client rectange of a DOM element relative to the client viewport.
+ *
+ * @param {!Element} elem Element.
+ * @return {{height: number, left: number, top: number, width: number}} The
+ *     client rectangle of the element relative to the client viewport.
+ */
+puppet.clientRect = function(elem) {
+  var rect = bot.dom.getClientRect(elem);
+  return {
+    'height': rect.height,
+    'left': rect.left,
+    'top': rect.top,
+    'width': rect.width
+  };
 };
 
 /**
@@ -1691,17 +1866,36 @@ puppet.mouseButton_ = function(eventType, button) {
  * @param {string|!Element} pathOrElem XPath or element.
  * @param {number} dx increment in x coordinate.
  * @param {number} dy increment in y coordinate.
+ * @param {number=} opt_steps The number of steps that should occur as part of
+ *     the drag, default is 2.
  * @return {boolean} Whether the element is shown.
  */
-var drag = puppet.command(true, function(elem, desc, dx, dy) {
-  if (puppet.userAgent.isMobile()) {
-    bot.action.swipe(elem, dx, dy, new goog.math.Coordinate(0, 0),
-                     puppet.touchscreen_);
+var drag = puppet.command(true, function(elem, desc, dx, dy, opt_steps) {
+  var coords = new goog.math.Coordinate(0, 0);
+  if (puppet.userAgent.isMobile() && !puppet.forceMouseActions_) {
+    bot.action.swipe(elem, dx, dy, opt_steps, coords,
+        puppet.touchscreen_.getBotTouchscreen());
   } else {
-    return (mouse(elem, 'mousedown', 0, 0) &&
-            mouse(elem, 'mousemove', dx, dy) &&
-            mouse(elem, 'mouseup', dx, dy));
+    bot.action.drag(elem, dx, dy, opt_steps, coords,
+        puppet.mouse_.getBotMouse());
   }
+});
+
+/**
+ * Returns true if the element is shown, and if it is, swipes the element by
+ * (dx, dy).
+ *
+ * @param {string|!Element} pathOrElem XPath or element.
+ * @param {number} dx increment in x coordinate.
+ * @param {number} dy increment in y coordinate.
+ * @param {number=} opt_steps The number of steps that should occur as part of
+ *     the swipe, default is 2.
+ * @return {boolean} Whether the element is shown.
+ */
+var swipe = puppet.command(true, function(elem, desc, dx, dy, opt_steps) {
+  var coords = new goog.math.Coordinate(0, 0);
+  bot.action.swipe(elem, dx, dy, opt_steps, coords,
+      puppet.touchscreen_.getBotTouchscreen());
 });
 
 /**
@@ -1742,7 +1936,7 @@ puppet.input_ = function(elem, value) {
  */
 var select = puppet.command(true, function(elem, desc) {
   if (!bot.dom.isSelected(elem)) {
-    bot.action.click(elem, null, puppet.mouse_);
+    bot.action.click(elem, null, puppet.mouse_.getBotMouse());
   }
 });
 
@@ -1947,7 +2141,7 @@ function stop() {
         goog.string.htmlEscape(url + (url.indexOf('?') > 0 ? '&' : '?') +
                                'nostop') +
         '>?nostop</a> in URL to override.');
-    puppet.queueStack_.clear();
+    puppet.executor_.stop();
   }
 }
 
@@ -1964,25 +2158,16 @@ function stop() {
  * @param {number} sec Number of seconds to sleep.
  */
 function sleep(sec) {
-  if (puppet.PARAMS.step) {
+  if (puppet.state_.isDebugMode()) {
     puppet.echo('sleep() is skipped due to stepping.');
     return;
   }
 
-  var asyncSleepId = puppet.async.wait();
+  var asyncSleepId = puppet.executor_.wait();
   window.setTimeout(function() {
-    puppet.async.done(asyncSleepId);
+    puppet.executor_.notify(asyncSleepId);
   }, sec * 1000);
 }
-
-/**
- * Whether to verify that each of the dialog responses enqueued by the dialog()
- * command is consumed by some dialog box.
- *
- * @type {boolean}
- * @private
- */
-puppet.verifyDialogs_ = true;
 
 /**
  * Responds to prompt/confirm/alert dialog boxes. Given a command, returns a new
@@ -2011,30 +2196,29 @@ puppet.verifyDialogs_ = true;
  *
  * @param {function(...):*} command Command expected to trigger the dialog box.
  * @param {(string|boolean)=} opt_response Response to the dialog box.
+ * @param {(string|!RegExp)=} opt_message Value to match against dialog message.
+ * @return {function(...):*} Command that also expects a dialog box.
  */
-function dialog(command, opt_response) {
+function dialog(command, opt_response, opt_message) {
   var savedDialogFunction, dialogAsyncId;
   var dialogType = !goog.isDef(opt_response) ? 'alert' :
       (goog.isBoolean(opt_response) ? 'confirm' : 'prompt');
   function cleanupDialogHandlers() {
     puppet.window()[dialogType] = savedDialogFunction;
-    if (dialogAsyncId) {
-      puppet.async.done(dialogAsyncId);
-    }
+    puppet.executor_.notify(dialogAsyncId);
   }
 
   return function(var_args) {
     savedDialogFunction = puppet.window()[dialogType];
-    puppet.window()[dialogType] = function() {
+    puppet.window()[dialogType] = function(msg) {
+      if (opt_message) {
+        puppet.assert(puppet.matches(msg, opt_message));
+      }
       cleanupDialogHandlers();
       return opt_response;
     };
-    // TODO(user) Wait unconditionally once we are no longer using
-    // Selenium-backed WebDriver.
-    if (puppet.verifyDialogs_) {
-      dialogAsyncId = puppet.async.waitUntilTimeout(puppet.PARAMS.timeout,
-          'expected ' + dialogType + ' dialog never appeared');
-    }
+    dialogAsyncId = puppet.executor_.wait(
+        'expected ' + dialogType + ' dialog never appeared');
     var commandReturn = command.apply(null, arguments);
     if (commandReturn !== false) {
       puppet.echo('-- waiting for a ' + dialogType + ' dialog ...');
@@ -2046,16 +2230,6 @@ function dialog(command, opt_response) {
 }
 
 /**
- * Sets whether to verify that each of the dialog responses enqueued by the
- * dialog() command is consumed by some dialog box.
- *
- * @param {boolean} verify Whether to verify.
- */
-puppet.setVerifyDialogs = function(verify) {
-  puppet.verifyDialogs_ = verify;
-};
-
-/**
  * Setup the dialog handlers.
  *
  * @private
@@ -2063,10 +2237,27 @@ puppet.setVerifyDialogs = function(verify) {
 puppet.setupDialogs_ = function() {
 
   function setDialogFunctionToError(dialogType) {
-    var originalFunction = puppet.window()[dialogType];
-    puppet.window()[dialogType] = function(message) {
-      if (!puppet.batch_) {
-        return originalFunction(message);
+    var win = puppet.window();
+    var originalFunc = win[dialogType];
+    // Don't overwrite the dialog if it has already been overwritten.
+    if (bot.userAgent.IE_DOC_PRE10 || goog.userAgent.OPERA ||
+        (goog.userAgent.product.ANDROID &&
+         !bot.userAgent.isProductVersion(4))) {
+      var functionRe = new RegExp('\s*function ' + dialogType +
+                                  '\(\).*\[native code\]');
+      if (!functionRe.test(String(originalFunc))) {
+        return;
+      }
+    } else {
+      var prototypeFunc = win.constructor && win.constructor.prototype &&
+          win.constructor.prototype[dialogType];
+      if (prototypeFunc && originalFunc != prototypeFunc) {
+        return;
+      }
+    }
+    win[dialogType] = function(message) {
+      if (puppet.state_.isFinished()) {
+        return originalFunc(message);
       }
       puppet.logging.error('Unexpected ' + dialogType +
                            ' dialog with message "' + message + '"');
@@ -2091,8 +2282,7 @@ puppet.setupDialogs_ = function() {
 // Called when an error occur during assert.
 puppet.logging.setErrorListener(function() {
   // Throws exception and stops the test, called when assert function fails.
-  puppet.ready_ = false;
-  var stack = puppet.stacktrace.get().join('<br>');
+  var stack = webdriver.stacktrace.get().join('<br>');
   puppet.done_(stack);
   throw stack;
 });
@@ -2102,13 +2292,6 @@ puppet.logging.addLogListener(function(html, text) {
   puppet.console_.appendLogLine(html);
   puppet.report_ += text;
 });
-
-// Echo text to the Firebug console, if available.
-if (window.console) {
-  puppet.logging.addLogListener(function(html, text) {
-    window.console.log(text);
-  });
-}
 
 // Echo text to the Unix terminal for Firefox, if available.
 if (window.dump) {
@@ -2131,13 +2314,13 @@ if (window.dump) {
 puppet.echo = function(x) {
   var flashWasOn = false;
   if (goog.typeOf(x) == 'object' && x.nodeType && x.tagName) {
-    flashWasOn = puppet.flash_((/** @type {!Element} */ x), false);
+    flashWasOn = puppet.elements.flash(/** @type {!Element} */ (x), false);
   }
 
   puppet.logging.log(x);
 
   if (flashWasOn) {
-    puppet.flash_((/** @type {!Element} */ x), true);
+    puppet.elements.flash(/** @type {!Element} */ (x), true);
   }
 };
 
@@ -2149,9 +2332,7 @@ puppet.echo = function(x) {
  * @param {string=} opt_comment Comment to echo if false.
  */
 puppet.assert = function(value, opt_comment) {
-  if (!value) {
-    puppet.logging.error('Assertion failure: ' + (opt_comment || value));
-  }
+  puppet.logging.check(value, 'Assertion failure: ' + (opt_comment || value));
 };
 
 /**
@@ -2170,111 +2351,30 @@ function assert(value, opt_comment) {
 }
 
 /**
- * Asserts that both arguments are defined.
- *
- * @param {*} x Any object.
- * @param {*} y Any object.
- * @param {string=} opt_comment Comment on the assertion.
- * @private
- */
-puppet.assertDefined_ = function(x, y, opt_comment) {
-  var undef1 = typeof x === 'undefined';
-  var undef2 = typeof y === 'undefined';
-  if (undef1) {
-    puppet.logging.log('First argument undefined');
-  }
-
-  if (undef2) {
-    puppet.logging.log('Second argument undefined');
-  }
-
-  puppet.assert(!undef1 && !undef2, opt_comment);
-};
-
-/**
- * Asserts that both arguments are defined and equal.
- *
- * This simple function should not be inlined so that the stack trace
- * shows the arguments during debugging.
+ * Asserts that the arguments are equal (===).
  *
  * @param {*} x Any object.
  * @param {*} y Any object.
  * @param {string=} opt_comment Comment on the equality.
  */
 function assertEq(x, y, opt_comment) {
-  puppet.assertDefined_(x, y, opt_comment);
-
-  if (x != y) {
-    puppet.logging.log('Expected: ' + x + '\nActual:   ' + y);
-  }
-
-  puppet.assert(x == y, opt_comment);
+  var comment = (goog.isDef(opt_comment) ? opt_comment + '. ' : '') +
+      ('Expected: ' + x + '; Actual:   ' + y);
+  puppet.assert(x === y, comment);
 }
 
 /**
- * Asserts that both arguments are defined and not equal.
- *
- * This simple function should not be inlined so that the stack trace
- * shows the arguments during debugging.
+ * Asserts that the arguments are not equal (!==).
  *
  * @param {*} x Any object.
  * @param {*} y Any object.
  * @param {string=} opt_comment Comment on the inequality.
  */
 function assertNotEq(x, y, opt_comment) {
-  puppet.assertDefined_(x, y, opt_comment);
-
-  if (x == y) {
-    puppet.logging.log('Same: ' + x);
-  }
-  puppet.assert(x != y, opt_comment);
+  var comment = (goog.isDef(opt_comment) ? opt_comment + '. ' : '') +
+      ('Unexpectedly equal: ' + x);
+  puppet.assert(x !== y, comment);
 }
-
-/**
- * The number of milliseconds that the tested item is highlighted in red.
- *
- * @const
- * @private
- * @type {number}
- */
-puppet.FLASH_INTERVAL_ = 500;
-
-/**
- * XPath resolved to elem cache.
- * @type {Object}
- * @private
- */
-puppet.elemCache_ = {};
-
-/**
- * Computes the path through the DOM to the given element, expressed
- * in CSS selector like syntax using element names, class names, and
- * id values. The returned value is used for diagnostic output, not
- * for actual evaluation.
- *
- * @param {!Element} element The element.
- * @return {string} A CSS selector starting at #document that selects
- *     the element and includes all nodes on the way from the document
- *     to the element. If element is null, the selector is empty.
- * @private
- */
-puppet.describeElementLocation_ = function(element) {
-  var path = [];
-  for (var elem = element; elem; elem = puppet.parentElement_(elem)) {
-    var selector = elem.nodeName;
-    if (elem.id) {
-      selector += '#' + elem.id;
-    }
-    // Interestingly, SVG DOM nodes do have a className property but
-    // that's not a string, i.e. it doesn't have a split() method.
-    if (goog.isString(elem.className) && elem.className) {
-      var c = elem.className.split(/\s+/);
-      selector += '.' + c.join('.');
-    }
-    path.unshift(selector);
-  }
-  return path.join(' > ');
-};
 
 /**
  * Gets the single element matching an XPath expression.
@@ -2282,79 +2382,35 @@ puppet.describeElementLocation_ = function(element) {
  * Returns null if no such element matches the expression and throws
  * an exception if multiple elements match it.
  *
- * @param {string|!Element} pathOrElem XPath or element.
+ * @param {string|!Element|function(): !Array.<!Element>} pathOrElem XPath
+ *     or element or function that returns an array of elements.
  * @return {Element} The element or null if none at that path.
  */
 puppet.elem = function(pathOrElem) {
-  puppet.assert(pathOrElem, 'Null or undefined xpath/element.');
-  var elem;
-  var type = typeof pathOrElem;
-
-  // If the argument is an XPath, resolve it to an element.
-  if (type == 'string') {
-    var cached = puppet.elemCache_[pathOrElem];
-    if (cached) {
-      return cached;
-    }
-    var nodes = puppet.xpath.resolveXPath(
-        (/** @type {string} */ pathOrElem), puppet.window());
-    elem = puppet.nodeToElement_(nodes.iterateNext());
-    if (elem) {
-      var nextElem = nodes.iterateNext();
-      puppet.assert(nextElem == null,
-                    'XPath matches multiple elements: ' +
-                    pathOrElem +
-                    '; first matching element: ' +
-                    puppet.describeElementLocation_(elem) +
-                    '; second matching element: ' +
-                    puppet.describeElementLocation_(
-                        /** @type {!Element} */(nextElem)));
-    }
-    puppet.elemCache_[pathOrElem] = elem;
-
-  // Otherwise, presume it is an element.
-  } else {
-    puppet.assert(goog.typeOf(pathOrElem) == 'object');
-    elem = (/** @type {!Element} */ pathOrElem);
-  }
-
-  // Unless noflash is set, flash the element on and schedule it to flash off.
-  if (elem && !puppet.PARAMS.noflash) {
-    puppet.flash_(elem, true);
-    window.setTimeout(function() {
-      puppet.flash_((/** @type {!Element} */ elem), false);
-    }, puppet.FLASH_INTERVAL_);
-  }
-
-  return elem;
+  return puppet.elements.get(pathOrElem, puppet.window(), puppet.state_);
 };
 
 /**
  * Gets all elements by an XPath expression.
  *
- * @param {string|!Array.<!Element>} pathOrElems XPath or array of
- *     elements.
+ * @param {string|!Array.<!Element>|function(): !Array.<!Element>} pathOrElems
+ *    XPath or array of elements or function that an array of elements.
  * @return {!Array.<!Element>} Elements at the given path.
  */
 puppet.elems = function(pathOrElems) {
-  puppet.assert(pathOrElems, 'Null or undefined xpath/element array.');
-  var elems;
-  if (typeof pathOrElems == 'string') {
-    var nodes = puppet.xpath.resolveXPath(pathOrElems, puppet.window());
-    elems = [];
-    // Firefox/Safari uses 'null' while xpath.js (for IE) uses
-    // 'undefined' to indicate the end of iteration.
-    for (var e = nodes.iterateNext(); e; e = nodes.iterateNext()) {
-      var elem = puppet.nodeToElement_(e);
-      if (elem) {
-        elems.push(elem);
-      }
-    }
-  } else {
-    puppet.assert(pathOrElems instanceof Array);
-    elems = pathOrElems;  // Already an array of HTML elements.
-  }
-  return elems;
+  return puppet.elements.getAll(pathOrElems, puppet.window());
+};
+
+/**
+ * Adds a listener this is called whenever an element is located, excluding
+ * cached elements.
+ *
+ * @param {function((!Element|!Array.<!Element>),
+ *     (string|!Element|!Array.<!Element>|function(): !Array.<!Element>))}
+ *     listener Listener function.
+ */
+puppet.addElemListener = function(listener) {
+  puppet.elements.addListener(listener);
 };
 
 /**
@@ -2377,53 +2433,114 @@ puppet.define = function(x, var_args) {
 };
 
 /**
+ * @param {{x: number, y:number}} arg The window command argument.
+ * @return {boolean} Whether a default value needs to be supplied.
+ * @private
+ */
+puppet.checkWindowCommand_ = function(arg) {
+  var x, y;
+  for (var dimension in arg) {
+    if (dimension == 'x') {
+      x = arg[dimension];
+    } else if (dimension == 'y') {
+      y = arg[dimension];
+    } else {
+      throw Error('The window argument value, ' + dimension +
+          ', was unexpected. Must be x or y.');
+    }
+  }
+  if (!goog.isDef(x) && !goog.isDef(y)) {
+    throw Error('No x or y values were specified.');
+  }
+  return !goog.isDef(x) || !goog.isDef(y);
+};
+
+/**
+ * Resize the content iframe window to a given width and/or height.
+ * Usage:
+ *   resize({x: 15}); // Resize to 15 pixels on the x-axis
+ *   resize({y: 25}); // Resize to 25 pixels on the y-axis
+ *   resize({x: 10, y: 20}); // Resize to 10 x 15 pixels on x and y axis
+ *                           // respectively.
+ *
+ * @param {{x: number, y: number}} dimensions The new window dimensions. The
+ *    valid keys for this object are 'x' and 'y'.
+ */
+var resize = function(dimensions) {
+  var size;
+  var needDefaultValue = puppet.checkWindowCommand_(dimensions);
+  if (needDefaultValue) {
+    size = bot.window.getSize();
+  }
+  bot.window.setSize(new goog.math.Size(
+      goog.isDef(dimensions['x']) ? dimensions['x'] : size.width,
+      goog.isDef(dimensions['y']) ? dimensions['y'] : size.height));
+};
+
+/**
  * Resize the content iframe window to a given width.
  *
  * @param {string} width Width of the window (e.g. 800px or 100%).
+ * @deprecated Use resize instead.
  */
 puppet.resizeWidth = function(width) {
-  puppet.IFRAME_.width = width;
+  var size = bot.window.getSize();
+  size.width = parseInt(width, 10);
+  bot.window.setSize(size);
 };
 
 /**
  * Resize the content iframe window to a given height.
  *
  * @param {string} height Height of the window (e.g. 800px or 100%).
+ * @deprecated Use resize instead.
  */
 puppet.resizeHeight = function(height) {
-  puppet.IFRAME_.height = height;
-  // Resizing only the height will not generate an EVENT_resize in IE.
-  // To generate the event in IE, we also set the width to itself.
-  if (puppet.userAgent.isIE()) {
-    puppet.IFRAME_.width = puppet.IFRAME_.width;
+  var size = bot.window.getSize();
+  size.height = parseInt(height, 10);
+  bot.window.setSize(size);
+};
+
+/**
+ * Scroll the content iframe window to a given width/height or to an element.
+ * Usage:
+ *   scroll({x: 15}); // Scroll to 15 pixels on the x-axis
+ *   scroll({y: 25}); // Scroll to 25 pixels on the y-axis
+ *   scroll({x: 10, y: 20}); // Scroll to 10 x 15 pixels on x and y axis
+ *                           // respectively.
+ *   scroll(puppet.elem(id('a'))); // Scroll to the element with id 'a'.
+ *
+ * @param {{x: number, y:number}|string|!Element} positionOrPathOrElem An XPath
+ *     or element to be scrolled into view or the dimensions that indicate the
+ *     new scroll position (valid keys for this object are 'x' and 'y').
+ */
+var scroll = function(positionOrPathOrElem) {
+  if (goog.isString(positionOrPathOrElem) ||
+      goog.dom.isElement(positionOrPathOrElem)) {
+    var pathOrElem = /** @type {string|!Element} */ (positionOrPathOrElem);
+    puppet.scrollToElem_(pathOrElem);
+  } else {
+    var coord;
+    var position = /** @type {{x: number, y: number}} */ (positionOrPathOrElem);
+    var needDefaultValue = puppet.checkWindowCommand_(position);
+    if (needDefaultValue) {
+      coord = bot.window.getScroll();
+    }
+    bot.window.setScroll(new goog.math.Coordinate(
+        goog.isDef(position['x']) ? position['x'] : coord.x,
+        goog.isDef(position['y']) ? position['y'] : coord.y));
   }
 };
 
 /**
- * Returns the node cast to an Element, if it is an element; otherwise
- * returns null.
+ * Scrolls the given element into view.
  *
+ * @param {string|!Element} pathOrElem XPath or element to scroll to.
  * @private
- * @param {Node} node Node.
- * @return {Element} The node cast to an element or null.
  */
-puppet.nodeToElement_ = function(node) {
-  if (!node) return null;
-  return node.nodeType == 1 ? (/** @type {!Element} */ node) : null;
-};
-
-/**
- * Returns the parent of the element if the parent is itself an element;
- * otherwise, returns null.
- *
- * @private
- * @param {!Element} elem Element.
- * @return {Element} Parent node if it exists and if it is an element.
- */
-puppet.parentElement_ = function(elem) {
-  var parent = elem.parentNode;
-  return puppet.nodeToElement_(parent);
-};
+puppet.scrollToElem_ = puppet.command(false, function(elem, desc) {
+  bot.action.scrollIntoView(elem);
+});
 
 
 //
@@ -2466,16 +2583,14 @@ puppet.currentSourceCallSite_ = function() {
   // We will populate the call site as much as we can.
   var callSite = {file: null, line: null, code: null};
 
-  // Get the stack trace. The first three lines are in Puppet code.
-  // The fourth line is the first that enters user's codes.
-  var stack = puppet.stacktrace.get();
-  if (stack.length < 4) {
+  // Get the stack trace. The first two frames are in Puppet code. The third
+  // frame is the first that enters user's codes.
+  var stack = webdriver.stacktrace.get();
+  if (stack.length < 3) {
     return callSite;
   }
-  var currentFrame = stack[3];
-  var url = currentFrame.url;
-  var line = currentFrame.line;
-
+  var url = stack[2].getUrl();
+  var line = stack[2].getLine();
   var parametersIndex = url.indexOf('\?');
   var filename = parametersIndex == -1 ?
       url.substring(url.lastIndexOf('\/') + 1) :
@@ -2540,76 +2655,6 @@ puppet.debug = function(msg) {
 };
 
 /**
- * Flashes/highlight the element in action. Returns whether the flash state
- * changed as a result of this call.
- *
- * The highlight may not be cleared properly if the element is copied
- * during highlight such as during infowindow resizing.
- *
- * @param {!Element} elem The target element.
- * @param {boolean} on True turns flash on, false turns it off.
- * @return {boolean} Whether the flash state changed.
- * @private
- */
-puppet.flash_ = function(elem, on) {
-  try {
-    var savedColor = puppet.getPuppetProperty_(elem, 'backgroundColor');
-
-    // The backgroundColor Puppet property is present iff the flash is on.
-    if (on == goog.isDefAndNotNull(savedColor)) {
-      return false;
-    }
-
-    // Otherwise, turn the flash on or off, as given.
-    // NOTE(user): It is important that the style be set with
-    //   elem.style['background-color'] = ...
-    // and not
-    //   elem.style['backgroundColor'] = ...
-    // nor
-    //   elem.style.backgroundColor = ...
-    // because the latter two don't complete synchronously on IE and may
-    // transiently make the element disappear while it is in process!
-    if (on) {
-      puppet.setPuppetProperty_(elem, 'backgroundColor',
-                                elem.style.backgroundColor);
-      elem.style['background-color'] = 'red';
-    } else if (!on) {
-      elem.style['background-color'] = (/** @type {string} */ savedColor);
-      puppet.setPuppetProperty_(elem, 'backgroundColor', null);
-    }
-    return true;
-  } catch (e) {
-    // In IE, accessing an element after a new document is loaded
-    // can cause 'Permission denied' exception. Ignore the exception.
-    return false;
-  }
-};
-
-/**
- * If execution is in batch mode (not interactive).
- *
- * @private
- * @type {boolean}
- */
-puppet.batch_ = true;
-
-/**
- * Starting time.
- *
- * @private
- * @type {!Date}
- */
-puppet.startTime_ = new Date;
-
-/**
- * The number of remaining commands to step through.
- *
- * @private
- * @type {number}
- */
-puppet.steps_ = 1;
-
-/**
  * The arguments in the last call of window.open.
  *
  * Puppet cannot control or check elements in new windows opened by
@@ -2622,52 +2667,6 @@ puppet.steps_ = 1;
 puppet.openArgs = null;
 
 /**
- * If command execution is paused.
- *
- * @private
- * @type {boolean}
- */
-puppet.paused_ = false;
-
-/**
- * Starts (and resumes if stopped) the execution of commands.
- * @private
- */
-puppet.start_ = function() {
-  var next = puppet.windowInitialized_ && puppet.ready_ && puppet.batch_ &&
-      puppet.commandIndex_ > 0 && !puppet.async.isWaiting();
-  var step = !puppet.PARAMS.step || puppet.steps_ > 0;
-  if (!puppet.paused_ && next && !step) {
-    puppet.paused_ = true;
-    puppet.echo('Paused; click \'continue\' or \'step\' to resume.');
-  }
-
-  // The execution order of onload handlers on different documents is
-  // not guaranteed: The onload handler in this file on the document
-  // of the control iframe may be executed before the onload handler
-  // in the test file on the main document; that is, this function may
-  // be called before any command has been queued. Hence the checking
-  // of puppet.commandIndex_; otherwise, a test can pass trivially.
-  if (next && step) {
-    puppet.paused_ = false;
-    puppet.steps_--;
-    try {
-      var call =
-          /** @type {puppet.QueuedCall_} */(puppet.queueStack_.dequeue());
-      puppet.execute_(call);
-    } catch (e) {
-      var stack = puppet.trim_(e.stack || '');
-      var message = 'Error: ' + (e.message || e) + stack;
-      puppet.done_(message);
-      throw e;  // Rethrow the same exception.
-    }
-    // Wait for network and js evaluation.
-  } else {
-    puppet.setTimeout_(puppet.start_, puppet.waitInterval_);
-  }
-};
-
-/**
  * Finishes execution of commands.
  *
  * @param {string=} opt_message A summary message to be displayed when
@@ -2675,7 +2674,7 @@ puppet.start_ = function() {
  * @private
  */
 puppet.done_ = function(opt_message) {
-  if (!puppet.batch_) {
+  if (puppet.state_.isFinished()) {
     return;
   }
 
@@ -2687,7 +2686,23 @@ puppet.done_ = function(opt_message) {
     status = puppet.TestStatus.PASSED;
   }
   puppet.updateStatus_(status);
-  puppet.batch_ = false;
+  puppet.state_.setFinished(true);
+  if (puppet.executor_.isExecuting()) {
+    puppet.executor_.stop();
+  }
+
+  if (puppet.testCase_) {
+    var resultsByName = puppet.testCase_.getResults();
+    for (var key in resultsByName) {
+      puppet.resultsByName_[key] = resultsByName[key];
+      // Puppet users are used to seeing the entire test report. On a failure,
+      // add an error object so that the user can see both the error that
+      // triggered the test failure as well as the test report.
+      if (puppet.resultsByName_[key].length > 0) {
+        puppet.resultsByName_[key].push(puppet.report_);
+      }
+    }
+  }
 
   var elem = document.createElement('div');
   // Do not use 'result' as the DOM identifier: the identifier is
@@ -2711,7 +2726,7 @@ puppet.done_ = function(opt_message) {
 
   // Notify the multi-runner, if any.
   if (puppet.runner_) {
-    puppet.runner_.notifyDone(window);
+    puppet.runner_['notifyDone'](window);
   }
 };
 
@@ -2722,13 +2737,7 @@ puppet.done_ = function(opt_message) {
  * @private
  */
 puppet.finalize_ = function(passed) {
-  for (var i = 0; i < puppet.finalizers_.length; i++) {
-    puppet.finalizers_[i](passed);
-  }
-
-  if (puppet.lastFinalizer_) {
-    puppet.lastFinalizer_(passed);
-  }
+  puppet.finalize.callFinalizers(passed);
 
   if (puppet.PARAMS.close) {
     window.close();
@@ -2758,22 +2767,6 @@ puppet.appendLoadParams = function(url) {
 };
 
 /**
- * Gets the elapsed seconds since the loading of the document.
- *
- * @private
- * @return {string} the elapsed seconds.
- */
-puppet.time_ = function() {
-  function pad(x) { return ('' + x).length < 2 ? '0' + x : '' + x; }
-  var now = new Date;
-  var hour = pad(now.getHours());
-  var min = pad(now.getMinutes());
-  var sec = pad(now.getSeconds());
-  var elapsed = (now - puppet.startTime_) / 1000.0;
-  return hour + ':' + min + ':' + sec + ' (' + elapsed + 's)';
-};
-
-/**
  * Adds an event listener for 'load'.
  *
  * @param {!(Window|Element)} target Target to listen on.
@@ -2788,101 +2781,35 @@ puppet.addOnLoad_ = function(target, listener) {
  * Steps through a number of commands if the test is running, or
  * restart the test if the test has finished.
  *
- * @param {number} count The number of steps.
+ * @private
  */
-puppet.step = function(count) {
-  // If the test is under progress (puppet.batch_) and not waiting for
-  // some condition (puppet.ready_), then switch to stepping mode and
-  // keep the URL. This allows switching to stepping mode in the
-  // middle of a test without restarting the whole test.
-  if (puppet.batch_ && puppet.ready_) {
-    puppet.PARAMS.step = true;
-    puppet.steps_ = count;
-  } else if (!puppet.PARAMS.step) {
+puppet.step_ = function() {
+  // If the test is under progress (!puppet.state_.isFinished), then switch
+  // to stepping mode and keep the URL. This allows switching to stepping mode
+  // in the middle of a test without restarting the whole test.
+  if (!puppet.state_.isFinished()) {
+    puppet.continue_();
+    puppet.state_.enterDebugMode();
+  } else if (!puppet.state_.isDebugMode()) {
     window.location.href = puppet.params.setUrlParam('step', '');
   }
-};
-
-/**
- * Trims paths about directory prefix, protocol and host, or query
- * parameters of an URL.
- *
- * For example, return puppet/basic/basic.html for
- * http://google.com:6342/puppet/basic/basic.html?time=100,
- *
- * or, return puppet/basic/basic.html:25 for
- * http://google.com:9099/filez/some/path/basic.html?time=100:25
- *
- * @param {string} url Original URL.
- * @return {string} Trimmed URL.
- * @private
- */
-puppet.trim_ = function(url) {
-  var prefix = document.location.protocol + '//' + document.location.host + '/';
-  return url
-      .replace(RegExp(prefix, 'g'), '')
-      .replace(/@/g, ' @')
-      .replace(/\?[^:]*/g, '');  // keep line number after colon
-};
-
-/**
- * Name of the test, trimmed from the URL.
- *
- * @return {string} The name of the test.
- */
-puppet.name = (function() {
-  var name = puppet.trim_(document.URL);
-  return function() {
-    return name;
-  }
-})();
-
-/**
- * Stops the command executation and waits for the next Puppet page load,
- * at which point, the specified optional continuation function is called.
- *
- * @param {function()=} opt_fn Continuation function.
- * @private
- */
-puppet.waitForLoad_ = function(opt_fn) {
-  var asyncLoadId;
-  if (puppet.PARAMS.timeout > 0) {
-    asyncLoadId = puppet.async.waitUntilTimeout(puppet.PARAMS.timeout,
-        'Page load failed: did not complete within ' + puppet.PARAMS.timeout +
-        ' seconds.');
-  } else {
-    // Wait indefinitely.
-    asyncLoadId = puppet.async.wait();
-  }
-
-  puppet.addOnLoad_(puppet.IFRAME_, function() {
-    // After the window has loaded, wait another cycle for the page to enter
-    // the browser history, so tests that use the browser history work.
-    window.setTimeout(function() {
-      puppet.async.done(asyncLoadId);
-      if (opt_fn) {
-        opt_fn();
-      }
-    }, 0);
-  });
 };
 
 /**
  * Initializes the window object for the new document.
  */
 puppet.initWindow = function() {
-  if (puppet.windowInitialized_) {
-    return;
-  }
-
   // Save the Puppet window and document here for listeners to refer to them.
   // Unfortunately, some frameworks hack Puppet to change the window under
   // test, which can cause problems if listeners then refer to them.
   var puppetWin = puppet.window();
-  var puppetDoc = puppet.document();
+  var puppetDoc;
+  try {
+    puppetDoc = puppet.document();
+  } catch (e) {}
 
-  // Make the atoms consider the Puppet iframe to be the "top" window.
-  bot.setWindow(puppetWin);
+  puppet.assert(puppetDoc, 'The page under test is not accessible. ' +
+      'Either the page failed to load or the test has gone cross-domain.');
 
   // A dummy onunload event handler ensures the browser will not cache the page
   // and will fire a load event when on history.back() and forward(), see:
@@ -2895,18 +2822,20 @@ puppet.initWindow = function() {
 
   // See the explanation at puppet.openArgs.
   puppetWin.open = function(opt_url) {
-    puppet.openArgs = goog.array.clone(arguments);
+    puppet['openArgs'] = goog.array.clone(arguments);
     puppet.echo('-- window.open() is mocked: <a href=' + opt_url +
         ' target=_blank>' + opt_url + '</a>');
     return null;
   };
 
-  // Set the Puppet window's onerror handler. On IE, setting onerror on
-  // puppet.window(), doesn't actually set the handler, so we unfortunately
-  // have to use event listening which provides fewer error details.
-  if (goog.userAgent.IE) {
+  // Set the Puppet window's onerror handler. On older versions of IE, setting
+  // onerror on puppet.window(), doesn't actually set the handler, so we
+  // unfortunately have to use event listening which provides fewer error
+  // details.
+  var errorMsg = 'Uncaught JavaScript error in application under test';
+  if (goog.userAgent.IE && puppetWin.attachEvent) {
     puppetWin.attachEvent('onerror', function() {
-      puppet.assert(false, 'error from server');
+      puppet.assert(false, errorMsg);
     });
   } else {
     puppetWin.onerror = function(message, url, line) {
@@ -2931,8 +2860,8 @@ puppet.initWindow = function() {
         return;
       }
 
-      puppet.assert(false, 'error from server: ' + message + '  @' + url +
-          ', line ' + line);
+      puppet.assert(
+         false, errorMsg + ': ' + message + ' at line ' + line + ' of ' + url);
     };
   }
 
@@ -2940,10 +2869,14 @@ puppet.initWindow = function() {
   // in response to live user actions) while the test is running, so the mouse
   // can be rested or move over the Puppet frame and not affect the application.
   var mouseMoveIgnored = false;
+  var wasLastEventTouchMove = false;
   var mouseMoveEvents = ['mousemove', 'mouseover', 'mouseout',
                          'mouseenter', 'mouseleave', 'touchmove'];
   goog.events.listen(puppet.document(), mouseMoveEvents, function(e) {
-    if (puppet.batch_ && !bot.events.isSynthetic(e)) {
+    // For touch browsers, a synthetic touchmove can trigger a trusted mousemove
+    // event, so don't ignore mousemove in that case.
+    if (!puppet.state_.isFinished() && !bot.events.isSynthetic(e) &&
+        !(wasLastEventTouchMove && e.type == 'mousemove')) {
       // It's useful to have a note in the log that an event has been
       // ignored, but we get MANY of these, so we just log once.
       if (!mouseMoveIgnored) {
@@ -2953,23 +2886,30 @@ puppet.initWindow = function() {
       e.stopPropagation();
       e.preventDefault();
     }
+    wasLastEventTouchMove = e.type == 'touchmove';
   }, true);
 
   // Make sure the window is marked not initialized on an unload event.
   // And clean up any listeners attached to the window above.
   goog.events.listenOnce(puppetWin, 'unload', function() {
-    puppet.windowInitialized_ = false;
+    if (puppet.executor_.isExecuting() && !puppet.windowInitializedId_) {
+      puppet.windowInitializedId_ = puppet.executor_.wait();
+    }
 
     // Remove the listener that ignores mousemove events.
     goog.events.removeAll(puppetDoc);
   });
 
-  // Run any registered initializers.
-  for (var i = 0; i < puppet.initializers_.length; i++) {
-    puppet.initializers_[i]();
+  // Proxying the puppet.window().console object. This is needed so that
+  // console.logs made from the app are passed through to puppet.
+  if (puppetWin['console']) {
+    puppet.logging.hijackConsole(puppetWin['console']);
   }
 
-  puppet.windowInitialized_ = true;
+  if (puppet.windowInitializedId_) {
+    puppet.executor_.notify(puppet.windowInitializedId_);
+    puppet.windowInitializedId_ = null;
+  }
 };
 
 /**
@@ -2980,32 +2920,35 @@ puppet.initWindow = function() {
 puppet.setup_ = function() {
   // Function split() returns [''] for the empty split, hence the array
   // always contains at least one element.
-  if (!puppet.stacktrace.BROWSER_SUPPORTED && Number(puppet.PARAMS.lines[0])) {
+  if (!webdriver.stacktrace.BROWSER_SUPPORTED &&
+      Number(puppet.PARAMS.lines[0])) {
     alert('Param ?lines is not supported for this browser;' +
         ' use ?cmds instead.');
   }
 
   puppet.addOnLoad_(window, puppet.initialize_);
-  document.onkeypress = function(event) {
-    if (puppet.userAgent.isIE(0, 9) || !document.dispatchEvent) {
-      event = window.event;
-    }
-    var target = event.target || event.srcElement;
+  goog.events.listen(document, goog.events.EventType.KEYDOWN, function(event) {
+    var target = event.target;
 
     // Avoid input fields such as Firebug lite.
-    if (target != document.documentElement && // in Firefox
-        target != document.body) return;  // in Webkit or Internet Explorer
-
-    if (event.altKey || event.ctrlKey) return;
-    var code = String.fromCharCode(event.keyCode || event.which);
-    switch (code) {
-      case 'c': puppet.PARAMS.step = false; break;  // c (continiue)
-      case 's': puppet.step(1); break;  // s (one step)
-      case 'S': puppet.step(3); break;  // S (three steps)
+    if (target != document.documentElement && target != document.body) {
+      return;
     }
-  };
 
-  // Skip setting window.onerror and auto-loading if Javascript unittest
+    if (event.altKey || event.ctrlKey || event.metaKey) {
+      return;
+    }
+    switch (event.keyCode) {
+      case goog.events.KeyCodes.C:  // c (continue)
+        puppet.continue_();
+        break;
+      case goog.events.KeyCodes.S:  // s (one step)
+        puppet.step_();
+        break;
+    }
+  });
+
+  // Skip setting window.onerror and auto-loading if JavaScript unittest
   // framework is in place (window.onerror is already set).
   if (!window.onerror) {
     /**
@@ -3019,54 +2962,11 @@ puppet.setup_ = function() {
       // Ignore missing scripts from auto-loading (see below).
       if (msg == 'Error loading script' &&
           (url.indexOf('/main.js') > 0 || url.indexOf('/site.js') > 0)) return;
-      puppet.ready_ = false;
-      var message = 'error from test: ' + msg + '  @' +
-          puppet.trim_(url) + ', line ' + line;
+      var message = 'Uncaught JavaScript error in test: ' +
+          msg + ' at line ' + line + ' of ' + url;
       puppet.done_(message);
       throw message;  // Rethrow the same exception.
     };
-  }
-
-  // Include the XPath library if no document.evaluate() function.
-  if (!window.document.evaluate) {
-    /** To export window.install() from the XPath library.
-     *
-     * @type {Object}
-     */
-    window.jsxpath = { exportInstaller: true };
-
-    // TODO(user): Check for updates; the current version is 0.1.11 in 2007.
-    // http://coderepos.org/share/wiki/JavaScript-XPath
-    puppet.include('./xpath/main.js');
-  }
-
-  /**
-   * Removes the control frame and thus its associated timer
-   * Otherwise, the browser will not terminate the associated timer
-   * that runs puppet.start_() and will complain that 'puppet' is
-   * undefined at the entrance of puppet.start_(), because its
-   * definition in the main document has already been removed.
-   *
-   * Safari and Chrome do not support 'window.onunload'.
-   */
-  window.onunload = function() {
-    // Sometimes Firefox throws unknown errors during document unload.
-    try {
-      // Skip if document.body is already deleted.
-      if (puppet.control_ && document.body) {
-        document.body.removeChild(puppet.control_);
-      }
-    } catch (e) {}
-
-    // Ideally, close the window to terminate a test early in the
-    // multi-test runner but in conflicts with window.close in run.html.
-  };
-
-  // Assign names to anonymous functions, see puppet.logging.toString.
-  for (var key in puppet) {
-    if (goog.typeOf(puppet[key]) == 'function') {
-      puppet[key].name = 'puppet.' + key;
-    }
   }
 };
 
@@ -3085,36 +2985,7 @@ puppet.call = function(url) {
 };
 
 /**
- * Returns the value of a custom, Puppet property on the given object.
- * These are properties Puppet has attached to user-visible objects.
- *
- * @param {!Object} x An object.
- * @param {string} name The name of a property.
- * @return {*} The value of the property.
- * @private
- */
-puppet.getPuppetProperty_ = function(x, name) {
-  return x._puppet ? x._puppet[name] : undefined;
-};
-
-/**
- * Sets the value of a custom, Puppet property on the given object.
- * These are properties Puppet has attached to user-visible objects.
- *
- * @param {!Object} x An object.
- * @param {string} name The name of a property.
- * @param {*} value The value of the property.
- * @private
- */
-puppet.setPuppetProperty_ = function(x, name, value) {
-  if (goog.isDef(value)) {
-    x._puppet = x._puppet || {};
-    x._puppet[name] = value;
-  }
-};
-
-/**
- * Fires a touch event with the given sets of TouchLists.
+ * Fires a touch event.
  *
  * This attempts to simulate touch events on the touch devices as closely as
  * possible.
@@ -3144,9 +3015,9 @@ puppet.touch_ = function(elem, type, x, y, opt_x, opt_y) {
   };
 
   function addTouch(x, y) {
-    var clientPos = goog.style.getClientPosition(elem);
-    var clientX = clientPos.x + x;
-    var clientY = clientPos.y + y;
+    var clientRect = bot.dom.getClientRect(elem);
+    var clientX = clientRect.left + x;
+    var clientY = clientRect.top + y;
 
     var touch = {
       identifier: goog.now(),
@@ -3192,7 +3063,8 @@ var pinch = puppet.command(true, function(elem, desc, distance, opt_x, opt_y) {
     throw new Error('Pinch is not supported on this browser');
   }
   var coord = puppet.coordFromOptXY_(opt_x, opt_y);
-  bot.action.pinch(elem, distance, coord, puppet.touchscreen_);
+  bot.action.pinch(elem, distance, coord,
+      puppet.touchscreen_.getBotTouchscreen());
   return true;
 });
 
@@ -3214,10 +3086,43 @@ var rotate = puppet.command(true, function(elem, desc, degrees, opt_x, opt_y) {
     throw new Error('Zoom is not supported on this browser');
   }
   var coord = puppet.coordFromOptXY_(opt_x, opt_y);
-  bot.action.rotate(elem, degrees, coord, puppet.touchscreen_);
+  bot.action.rotate(elem, degrees, coord,
+      puppet.touchscreen_.getBotTouchscreen());
   return true;
 });
 
+/**
+ * Changes the screen orientation. The mode argument must be one of 'portrait',
+ * 'landscape', 'portrait-secondary', or 'landscape-secondary'. Throws an
+ * exception on non-mobile browsers because their orientation cannot change.
+ *
+ * @param {string} mode The orientation mode.
+ */
+var orient = function(mode) {
+  if (!puppet.userAgent.isMobile()) {
+    throw new Error('orient is not supported on this browser');
+  }
+  var orientation;
+  switch (mode) {
+    case 'portrait':
+      orientation = bot.window.Orientation.PORTRAIT;
+      break;
+    case 'landscape':
+      orientation = bot.window.Orientation.LANDSCAPE;
+      break;
+    case 'portrait-secondary':
+      orientation = bot.window.Orientation.PORTRAIT_SECONDARY;
+      break;
+    case 'landscape-secondary':
+      orientation = bot.window.Orientation.LANDSCAPE_SECONDARY;
+      break;
+    default:
+      puppet.assert(false, 'Orientation must be portrait, landscape, ' +
+          'portrait-secondary, or landscape-secondary');
+      return;
+  }
+  bot.window.changeOrientation(orientation);
+};
 
 // Don't set up Puppet if we are in a testing environment.
 if (!puppet['runner']) {
