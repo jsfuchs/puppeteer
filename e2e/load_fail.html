@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<title>load fail test</title>
+<script src=../puppet.js></script>
+<script>
+/**
+ * This test is loaded dynamically and expected to fail.
+ */
+
+function testLoadFail() {
+  run(load, 'load_fail_page.html');
+}
+</script>

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<title>timeout fail test</title>
+<script src=../puppet.js></script>
+<script>
+/**
+ * This test is loaded dynamically and expected to fail.
+ */
+
+function setUpPage() {
+  // Set the command timeout shorter so this test runs quickly.
+  puppet.setCommandTimeoutSecs(3);
+}
+
+function testTimeout() {
+  run(function() {
+    return false;
+  });
+}
+</script>

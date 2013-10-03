@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<title>cross domain fail test</title>
+<script src=../puppet.js></script>
+<script>
+/**
+ * This test is loaded dynamically and expected to fail.
+ */
+
+function testCrossDomainFail() {
+  puppet.setCommandTimeoutSecs(10);
+  run(load(function() {
+    puppet.location().href = 'http://images.google.com';
+  }));
+}
+</script>

@@ -421,7 +421,9 @@ puppet.TestCase.prototype.executeNextTest_ = function() {
   function handleError(errorMsg) {
     hasError = true;
     testCase.doError_(currentTest, errorMsg);
-    testCase.executor_.stop();
+    if (testCase.executor_.isExecuting()) {
+      testCase.executor_.stop();
+    }
   }
 
   function setupTest() {

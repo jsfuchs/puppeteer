@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<title>clear fail test</title>
+<script src=../puppet.js></script>
+<script src=test_utils.js></script>
+<script>
+/**
+ * This test is loaded dynamically and expected to fail.
+ */
+
+function testClearFail() {
+  // This should fail because the div cannot be cleared.
+  run(function() {
+    var unclearable = createElement('DIV');
+    unclearable.innerHTML = 'ha ha you cannot clear me';
+    clear(unclearable);
+  });
+}
+</script>

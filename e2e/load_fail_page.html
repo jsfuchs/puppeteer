@@ -1,0 +1,9 @@
+<!DOCTYPE html>
+<title>load fail testdata page</title>
+<body>
+This page should NOT load successfully.
+<script>
+window.top.puppet.initWindow();
+throw Error();
+</script>
+</body>

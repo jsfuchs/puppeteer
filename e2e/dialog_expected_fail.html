@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<title>dialog expected fail test</title>
+<script src=../puppet.js></script>
+<script>
+/**
+ * This test is loaded dynamically and expected to fail.
+ */
+
+function testExpectedDialogFail() {
+  // Lower the timeout so we don't wait a long time for the dialog to appear.
+  puppet.setCommandTimeoutSecs(2);
+
+  function noop() {}
+  var dialogType = puppet.params.getUrlParam('dialog');
+  if (dialogType == 'alert') {
+    run(dialog(noop));
+  } else if (dialogType == 'confirm') {
+    run(dialog(noop, true));
+  } else if (dialogType == 'prompt') {
+    run(dialog(noop, ''));
+  } else {
+    // This test will pass, so the opening test fails.
+    puppet.echo('No valid dialog type provided');
+  }
+}
+</script>

@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<title>tearDownPage fail test</title>
+<script src="../../../testing/puppet/puppet.js"></script>
+<script>
+function testFail() {
+  run(assert, false);
+}
+
+function tearDownPage() {
+  puppet.echo('tearDownPage ran');
+}
+</script>

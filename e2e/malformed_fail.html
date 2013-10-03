@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<title>malformed fail test</title>
+<script src=../puppet.js></script>
+<script>
+// Shorten the whole test timeout, so we don't wait for the default 10 minutes.
+puppet.PARAMS.time = 1;
+
+/**
+ * This test is loaded dynamically and expected to fail.
+ */
+window.onload = function() {
+  24t 4908 49j r [g9 12t u2-tu +g ajgoan g j2p9t 9h
+};
+</script>

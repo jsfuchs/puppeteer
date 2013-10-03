@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<title>present fail test</title>
+<script src=../puppet.js></script>
+<script>
+/**
+ * This test is loaded dynamically and expected to fail.
+ */
+
+function testPresentFail {
+  run(function() {
+    assert(present(id('notpresent')));
+  });
+}
+</script>
