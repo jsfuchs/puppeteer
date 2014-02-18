@@ -5,6 +5,10 @@
 function testCrossDomain() {
   var imageSearchIdentifier =
       xtitle('Google Images') + '|' + xsrc.c('images_logo');
+  if (puppet.userAgent.isAndroid()) {
+    // Android uses the same logo for search and image search home page.
+    run(stop);
+  }
 
   // Test that the Image Search logo is not on the page.
   run(not(shown), imageSearchIdentifier);
@@ -23,6 +27,6 @@ function testCrossDomain() {
   // event. Hence, skipping this test for WebKit since there are already page
   // load failure tests.
   if (!puppet.userAgent.isWebKit()) {
-    run(openAndExpectFail, 'cross_domain_fail.htm', /cross-domain/);
+    run(openAndExpectFail, 'cross_domain_fail.html', /cross-domain/);
   }
 }

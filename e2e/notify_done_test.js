@@ -6,11 +6,11 @@ function testNotifyDone() {
   var win;
   var notifyStatusCalled = false;
   var notifyDoneCalled = false;
-  window.puppet.runner = {
-    notifyStatus: function() {
+  window['puppet']['runner'] = {
+    'notifyStatus': function() {
       notifyStatusCalled = true;
     },
-    notifyDone: function() {
+    'notifyDone': function() {
       notifyDoneCalled = true;
     }
   };

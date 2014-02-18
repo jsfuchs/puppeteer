@@ -1,34 +1,39 @@
-<!DOCTYPE html>
-<!--
- Copyright 2011 Google Inc. All Rights Reserved.
+/* Copyright 2011 Google Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ *     You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *     See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * Author: joonlee@google.com (Joon Lee)
+ *
+ * The tests below are modeled after the closure user agent tests.
+ */
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
+goog.require('goog.testing.jsunit');
+goog.require('goog.testing.MockUserAgent');
+goog.require('puppet.userAgent');
 
-     http://www.apache.org/licenses/LICENSE-2.0
+goog.setTestOnly('puppet.userAgentTest');
 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+var mockUserAgent;
 
+function setUp() {
+  mockUserAgent = new goog.testing.MockUserAgent();
+  mockUserAgent.install();
+}
 
- The tests below are modeled after the closure user agent tests.
--->
-<html>
-<head>
-<title>useragent_test.html</title>
-<script src="test_bootstrap.js"></script>
-<script type="text/javascript">
-  goog.require('goog.testing.jsunit');
-  goog.require('puppet.userAgent');
-</script>
-</head>
-<body></body>
+function tearDown() {
+  goog.dispose(mockUserAgent);
+}
 
-<script type="text/javascript">
 function testInternetExplorer() {
   var ua = 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1; GTB6; ' +
            'chromeframe; .NET CLR 1.1.4322; InfoPath.1; ' +
@@ -189,7 +194,8 @@ function testIPhone() {
   assertEquals(false, puppet.userAgent.isUIWebView());
 
   ua = 'Mozilla/5.0 (iPhone; CPU like Mac OS X) AppleWebKit/536.26 ' +
-       '(KHTML, like Gecko) Mobile/10B143';
+       '(KHTML, like Gecko) GSA/3.2.1.25875 Mobile/11B554a ' +
+       'Safari/8536.25';
   assertProduct(ua, 'IPhone');
   assertEquals(true, puppet.userAgent.isWebKit('536.26'));
   assertEquals(true, puppet.userAgent.isMobileWebKit('536.26'));
@@ -212,7 +218,8 @@ function testIPad() {
   assertEquals(false, puppet.userAgent.isUIWebView());
 
   ua = 'Mozilla/5.0 (iPad; CPU like Mac OS X) AppleWebKit/536.26 ' +
-       '(KHTML, like Gecko) Mobile/10B146';
+       '(KHTML, like Gecko) GSA/3.2.0.25255 Mobile/11A465 ' +
+       'Safari/8536.25';
   assertProduct(ua, 'IPad');
   assertEquals(true, puppet.userAgent.isWebKit('536.26'));
   assertEquals(true, puppet.userAgent.isMobileWebKit('536.26'));
@@ -489,26 +496,10 @@ function testOperaEngine() {
   assertEngine('Opera/9.00 (Windows NT 5.1; U; en)', 'Opera');
   assertEngine('Opera/9.00 (Windows NT 5.2; U; en)', 'Opera');
   assertEngine('Opera/9.00 (Windows NT 6.0; U; en)', 'Opera');
-  // Test Opera spoofing as IE.  Currently detected as IE.
-  assertEngine('Mozilla/4.0 (compatible; MSIE 5.0; Windows 2000) ' +
-      'Opera 6.03 [en]', 'IE');
-  assertEquals(true, puppet.userAgent.isIE('5.0'));
-
-  assertEngine('Mozilla/4.0 (compatible; MSIE 5.0; Mac_PowerPC) ' +
-      'Opera 6.0 [en]', 'IE');
-  assertEquals(true, puppet.userAgent.isIE('5.0'));
-
-  assertEngine('Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; ' +
-      'en) Opera 8.50', 'IE');
-  assertEquals(true, puppet.userAgent.isIE('6.0'));
-
-  assertEngine('Mozilla/4.0 (compatible; MSIE 6.0; Symbian OS; ' +
-        'Nokia 6630/4.03.38; 6937) Opera 8.50 [es]', 'IE');
-  assertEquals(true, puppet.userAgent.isIE('6.0'));
 }
 
 function assertProduct(ua, product) {
-  puppet.userAgent.init(ua);
+  initializeUserAgent(ua);
   assertEquals(product == 'Chrome', puppet.userAgent.isChrome());
   assertEquals(product == 'Firefox', puppet.userAgent.isFirefox());
   assertEquals(product == 'Opera', puppet.userAgent.isOpera());
@@ -523,7 +514,7 @@ function assertProduct(ua, product) {
 }
 
 function assertEngine(ua, engine) {
-  puppet.userAgent.init(ua);
+  initializeUserAgent(ua);
   assertEquals(engine == 'IE', puppet.userAgent.isIE());
   assertEquals(engine == 'Gecko', puppet.userAgent.isGecko());
   assertEquals(engine == 'WebKit', puppet.userAgent.isWebKit());
@@ -532,7 +523,7 @@ function assertEngine(ua, engine) {
 }
 
 function assertPlatform(ua, platform) {
-  puppet.userAgent.init(ua);
+  initializeUserAgent(ua);
   assertEquals(platform == 'Windows', puppet.userAgent.isWindows());
   assertEquals(platform == 'Mac', puppet.userAgent.isMac());
   assertEquals(platform == 'Linux', puppet.userAgent.isLinux());
@@ -540,5 +531,9 @@ function assertPlatform(ua, platform) {
   assertEquals(platform == 'Blackberry', puppet.userAgent.isBlackberry());
   assertEquals(platform == 'Dolfin', puppet.userAgent.isDolfin());
 }
-</script>
-</html>
+
+function initializeUserAgent(ua) {
+  mockUserAgent.setUserAgentString(ua);
+  goog.userAgentTestUtil.reinitializeUserAgent();
+  puppet.userAgent.init(ua);
+}

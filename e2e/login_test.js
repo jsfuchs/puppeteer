@@ -2,8 +2,6 @@
  * @fileoverview Tests GAIA login/logout functionality.
  */
 
-puppet.include('google.js');
-
 var originalPuppetCall = puppet.call;
 
 function tearDown() {
@@ -29,20 +27,6 @@ function testBasic() {
 }
 
 function testFailure() {
-  // Mock a call failure in the Puppet call and check that it retries.
-  run(function() {
-    var timesCalled = 0;
-    puppet.call = function() {
-      timesCalled++;
-      if (timesCalled == 1) {
-        throw Error('fake failure');
-      } else if (timesCalled == 2) {
-        puppet.goog.loginCallback('fake@fake.com', {});
-      }
-    };
-  });
-  run(puppet.goog.login);
-
   // Mock a failure callback in the Puppet call and check that it retries.
   run(function() {
     var timesCalled = 0;
@@ -56,4 +40,10 @@ function testFailure() {
     };
   });
   run(puppet.goog.login);
+}
+
+function testLoginCallbackWithNullRetryFunction() {
+  // Test that calling the login callback when the retry function is
+  // goog.nullFunction does not raise an assertion failure.
+  run(puppet.goog.loginCallback, 'fake@fake.com', {});
 }

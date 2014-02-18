@@ -15,7 +15,7 @@ var textarea;
 function checkTyping(expectedValue, var_args) {
   var typeArgs = Array.prototype.slice.call(arguments, 1);
   typeArgs.unshift(textarea);
-  run(input, textarea, '');
+  run(clear, textarea);
   run(function() {
     type.apply(null, typeArgs);
   });
@@ -40,7 +40,7 @@ function testType() {
   run(checkTyping, 'abc', 'abc');
   run(checkTyping, 'abc', 'a', 'bc');
   run(checkTyping, 'abc', ['a', 'bc']);
-  var newline = puppet.userAgent.isIE(null, 9) ? '\r\n' : '\n';
+  var newline = puppet.userAgent.isIE(0, 9) ? '\r\n' : '\n';
   run(checkTyping, 'ab' + newline + 'c', 'ab', bot.Keyboard.Keys.ENTER, 'c');
   run(checkTyping, 'acd', 'ab', bot.Keyboard.Keys.BACKSPACE, ['c', 'd']);
 

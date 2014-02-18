@@ -30,6 +30,7 @@ goog.require('puppet.logging');
 goog.require('puppet.userAgent');
 goog.require('puppet.xpath');
 
+goog.setTestOnly('puppet exports');
 
 //////////////////////////////////////////////////////////////////////////////
 //

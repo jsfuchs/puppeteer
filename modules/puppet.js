@@ -53,6 +53,8 @@ goog.require('puppet.userAgent');
 goog.require('puppet.xpath');
 goog.require('webdriver.stacktrace');
 
+goog.setTestOnly('puppet');
+
 // Firefox 4+ ignores focus and blur events if it is not the active application.
 // Call the prototype focus() method because Puppet overrides the name focus.
 if (puppet.userAgent.isFirefox(4, null) && !window.document.hasFocus()) {
@@ -1087,7 +1089,7 @@ function load(urlOrCommand) {
     }
   } else {
     puppet.assert(typeof urlOrCommand == 'function');
-    return function(var_args) {
+    var ret = function(var_args) {
       waitForLoad();
       var commandReturn = urlOrCommand.apply(null, arguments);
       if (commandReturn) {
@@ -1095,11 +1097,15 @@ function load(urlOrCommand) {
       }
       return commandReturn;
     };
+    ret.toString = function() {
+      return 'load(' + urlOrCommand.toString() + ')';
+    };
+    return ret;
   }
 
   function waitForLoad(opt_fn) {
     var asyncLoadId = puppet.executor_.wait('Page load failed: did not' +
-        ' complete within ' + puppet.executor_.getCommandTimeoutMs() +
+        ' complete within ' + puppet.executor_.getCommandTimeoutMs() / 1000 +
         ' seconds. The javascript console may have more details.');
 
     puppet.addOnLoad_(puppet.getFrame_() || bot.getWindow(), function() {
@@ -1170,7 +1176,7 @@ var switchto = function(win) {
  * arguments it was passed, and it coerses return values !== false, to true.
  *
  * @param {boolean} action Whether this is used for an action command.
- * @param {function(!Element, string) : *} fn Continuation function.
+ * @param {function(!Element, string, ...) : *} fn Continuation function.
  * @return {function((string|!Element), ...) : boolean} Command function.
  */
 puppet.command = function(action, fn) {
@@ -1240,7 +1246,7 @@ var opacity = puppet.command(false, function(elem, desc, value, opt_max) {
 puppet.style = function(elem, key) {
   // If looking up the background color and the flash is on, turn the flash off
   // first, but remember to turn it on after getting the effective style.
-  var flashOnAfter = key == 'background-color' &&
+  var flashOnAfter = (key == 'background-color' || key == 'backgroundColor') &&
       puppet.elements.flash(elem, false);
   var value = bot.dom.getEffectiveStyle(elem, key);
   if (flashOnAfter) {
@@ -1866,17 +1872,20 @@ puppet.mouseButton_ = function(eventType, button) {
  * @param {string|!Element} pathOrElem XPath or element.
  * @param {number} dx increment in x coordinate.
  * @param {number} dy increment in y coordinate.
+ * @param {number=} opt_x The x coordinate relative to the element.
+ * @param {number=} opt_y The y coordinate relative to the element.
  * @param {number=} opt_steps The number of steps that should occur as part of
  *     the drag, default is 2.
  * @return {boolean} Whether the element is shown.
  */
-var drag = puppet.command(true, function(elem, desc, dx, dy, opt_steps) {
-  var coords = new goog.math.Coordinate(0, 0);
+var drag = puppet.command(true, function(elem, desc, dx, dy, opt_x, opt_y,
+    opt_steps) {
+  var coord = new goog.math.Coordinate(opt_x || 0, opt_y || 0);
   if (puppet.userAgent.isMobile() && !puppet.forceMouseActions_) {
-    bot.action.swipe(elem, dx, dy, opt_steps, coords,
+    bot.action.swipe(elem, dx, dy, opt_steps, coord,
         puppet.touchscreen_.getBotTouchscreen());
   } else {
-    bot.action.drag(elem, dx, dy, opt_steps, coords,
+    bot.action.drag(elem, dx, dy, opt_steps, coord,
         puppet.mouse_.getBotMouse());
   }
 });
@@ -1888,13 +1897,16 @@ var drag = puppet.command(true, function(elem, desc, dx, dy, opt_steps) {
  * @param {string|!Element} pathOrElem XPath or element.
  * @param {number} dx increment in x coordinate.
  * @param {number} dy increment in y coordinate.
+ * @param {number=} opt_x The x coordinate relative to the element.
+ * @param {number=} opt_y The y coordinate relative to the element.
  * @param {number=} opt_steps The number of steps that should occur as part of
  *     the swipe, default is 2.
  * @return {boolean} Whether the element is shown.
  */
-var swipe = puppet.command(true, function(elem, desc, dx, dy, opt_steps) {
-  var coords = new goog.math.Coordinate(0, 0);
-  bot.action.swipe(elem, dx, dy, opt_steps, coords,
+var swipe = puppet.command(true, function(elem, desc, dx, dy, opt_x, opt_y,
+     opt_steps) {
+  var coord = new goog.math.Coordinate(opt_x || 0, opt_y || 0);
+  bot.action.swipe(elem, dx, dy, opt_steps, coord,
       puppet.touchscreen_.getBotTouchscreen());
 });
 
@@ -1905,6 +1917,7 @@ var swipe = puppet.command(true, function(elem, desc, dx, dy, opt_steps) {
  * @param {string|!Element} pathOrElem XPath or element.
  * @param {string} value Value to be inputted.
  * @return {boolean} Whether the element is shown.
+ * @deprecated Use type or clear instead.
  */
 var input = puppet.command(true, function(elem, desc, value) {
   puppet.input_(elem, value);
@@ -2096,7 +2109,7 @@ function some(command) {
  *     Multi-element command.
  */
 function none(command) {
-  return function(pathOrElems, var_args) {
+  var ret = function(pathOrElems, var_args) {
     var elems = puppet.elems(pathOrElems);
     var args = goog.array.concat(null, goog.array.slice(arguments, 1));
     for (var i = 0; i < elems.length; i++) {
@@ -2105,6 +2118,10 @@ function none(command) {
     }
     return true;
   };
+  ret.toString = function() {
+    return 'none(' + command.toString() + ')';
+  };
+  return ret;
 }
 
 /**
@@ -2114,9 +2131,13 @@ function none(command) {
  * @return {function(...[*]) : boolean} Negated command.
  */
 function not(command) {
-  return function(var_args) {
+  var ret = function(var_args) {
     return command.apply(null, arguments) === false;
   };
+  ret.toString = function() {
+    return 'not(' + command.toString() + ')';
+  };
+  return ret;
 }
 
 /**
@@ -2208,7 +2229,7 @@ function dialog(command, opt_response, opt_message) {
     puppet.executor_.notify(dialogAsyncId);
   }
 
-  return function(var_args) {
+  var ret = function(var_args) {
     savedDialogFunction = puppet.window()[dialogType];
     puppet.window()[dialogType] = function(msg) {
       if (opt_message) {
@@ -2227,6 +2248,10 @@ function dialog(command, opt_response, opt_message) {
     }
     return commandReturn;
   };
+  ret.toString = function() {
+    return 'dialog(' + command.toString() + ')';
+  };
+  return ret;
 }
 
 /**

@@ -2,6 +2,11 @@
  * Test that an idle page doesn't receive mousemove events.
  */
 
+function shouldRunTests() {
+  // Mobile browsers do not support movemouse.
+  return !puppet.userAgent.isMobile();
+}
+
 function testIgnoreMouse() {
   function failListener(e) {
     assert(false, 'event type: ' + e.type);
@@ -31,7 +36,7 @@ function testIgnoreMouse() {
     goog.events.listen(div, mouseMoveEvents, function(e) {
       mouseMoved = true;
     });
-    mouse(div, 'mousemove');
+    movemouse(div);
   });
   run(function() {
     return mouseMoved;

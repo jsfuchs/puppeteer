@@ -21,7 +21,7 @@ function testScroll() {
     var scrollPosition = new goog.dom.DomHelper(
         puppet.document()).getDocumentScroll();
     assertEq(0, scrollPosition.x);
-    if (puppet.userAgent.isAndroid(null, 4.1)) {
+    if (puppet.userAgent.isAndroid(0, 4.1)) {
       assertEq(0, scrollPosition.y);
     } else {
       assert(scrollPosition.y > 1000);
@@ -32,7 +32,7 @@ function testScroll() {
 function verifyScroll(left, top) {
   var scrollPosition = new goog.dom.DomHelper(
       puppet.document()).getDocumentScroll();
-  if (puppet.userAgent.isAndroid(null, 4.1)) {
+  if (puppet.userAgent.isAndroid(0, 4.1)) {
     // Android prior to jellybean  always returns zero.
     left = 0;
     top = 0;

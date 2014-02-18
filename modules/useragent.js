@@ -22,8 +22,11 @@ goog.require('goog.userAgent');
 goog.require('goog.userAgent.platform');
 goog.require('goog.userAgent.product');
 goog.require('goog.userAgent.product.isVersion');
+goog.require('goog.userAgentTestUtil');
 goog.require('puppet.logging');
 goog.require('puppet.params');
+
+goog.setTestOnly('puppet.userAgent');
 
 
 /**
@@ -119,7 +122,7 @@ puppet.userAgent.initCustomConstants_ = function(userAgentString) {
                               /WebView/.test(userAgentString);
   puppet.userAgent.UIWEBVIEW_ = (goog.userAgent.product.IPHONE ||
                               goog.userAgent.product.IPAD) &&
-                              !/Safari/.test(userAgentString);
+                              /GSA/.test(userAgentString);
 };
 
 // Initialize the above custom constants with the real user agent.
@@ -601,19 +604,12 @@ puppet.userAgent.init = function(ua) {
   // Forcibly disable getDocumentMode_ which will interfere with
   // user agent overrides on IE 8.
   goog.userAgent.getDocumentMode_ = function() { return undefined; };
-  goog.userAgent.init_();
 
   // Unfortunately we can't isolate the useragent setting in a function
   // we can call, because things rely on it compiling to nothing when
   // one of the ASSUME flags is set, and the compiler isn't smart enough
   // to do that when the setting is done inside a function that's inlined.
-  goog.userAgent.OPERA = goog.userAgent.detectedOpera_;
-  goog.userAgent.IE = goog.userAgent.detectedIe_;
-  goog.userAgent.GECKO = goog.userAgent.detectedGecko_;
-  goog.userAgent.WEBKIT = goog.userAgent.detectedWebkit_;
-  goog.userAgent.MOBILE = goog.userAgent.detectedMobile_;
-  goog.userAgent.SAFARI = goog.userAgent.WEBKIT;
-  goog.userAgent.VERSION = goog.userAgent.determineVersion_();
+  goog.userAgentTestUtil.reinitializeUserAgent();
 
   goog.userAgent.product.init_();
   // In an ideal world, this assignment would be just a function in

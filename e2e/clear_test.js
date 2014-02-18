@@ -8,8 +8,8 @@ function testClear() {
   var textbox, checkbox;
   run(load, 'clear_page.html');
   run(function() {
-    textbox = puppet.elem(id('textbox'));
-    checkbox = puppet.elem(id('checkbox'));
+    textbox = /** @type {!Element} */(puppet.elem(id('textbox')));
+    checkbox = /** @type {!Element} */(puppet.elem(id('checkbox')));
   });
 
   // Test a non-empty textbox can be cleared.

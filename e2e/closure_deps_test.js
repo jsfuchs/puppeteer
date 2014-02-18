@@ -12,6 +12,6 @@ function testNamespaceRequiredIsAvailable() {
 
 function testNamespaceNotRequiredIsNotAvailable() {
   run(function() {
-    assert(!goog.isDef(goog.spellCheck));
+    assert(!goog.isDef(window['goog']['spellCheck']));
   });
 }

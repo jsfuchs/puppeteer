@@ -1,32 +1,24 @@
-<!DOCTYPE html>
-<!--
- Copyright 2011 Google Inc. All Rights Reserved.
+/* Copyright 2011 Google Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ *     You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *     See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * Author: gdennis@google.com (Greg Dennis)
+ */
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
+goog.require('goog.testing.jsunit');
+goog.require('puppet.params');
 
-     http://www.apache.org/licenses/LICENSE-2.0
 
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
-
--->
-<html>
-<head>
-<title>params_test.html</title>
-<script src="test_bootstrap.js"></script>
-<script type="text/javascript">
-  goog.require('goog.testing.jsunit');
-  goog.require('puppet.params');
-</script>
-</head>
-<body></body>
-
-<script type="text/javascript">
 function testSetUrlParamWithNoSpecialChars() {
   var url = puppet.params.setUrlParam('q', 'widgets',
       'http://www.google.com/search?hl=en');
@@ -75,14 +67,15 @@ function testSetUrlParamWithEscapedPercentInQuery() {
   assertEquals('http://www.google.com/search?q=%25&hl=en', url);
 }
 
+/**
+ * @suppress {visibility}
+ */
 function testGetAllAndGetUndeclared() {
   puppet.params.windowUrl_ = function() {
     return 'http://www.google.com/search?a=x&c=y&b&d';
   };
-  puppet.params.declareString('a');
+  puppet.params.declareString('a', '');
   puppet.params.declareBoolean('b');
   assertObjectEquals({a: 'x', b: '', c: 'y', d: ''}, puppet.params.getAll());
   assertObjectEquals({c: 'y', d: ''}, puppet.params.getUndeclared());
 }
-</script>
-</html>

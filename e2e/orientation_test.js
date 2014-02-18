@@ -16,8 +16,8 @@ function testOrientation() {
   if (!puppet.userAgent.isMobile()) {
     run(stop);
   }
-  run(puppet.resizeWidth, '360px');
-  run(puppet.resizeHeight, '480px');
+  run(resize, {x: 360});
+  run(resize, {y: 480});
   run(load, 'load_page.html');
 
   run(orient, 'portrait');

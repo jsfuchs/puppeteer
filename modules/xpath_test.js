@@ -1,34 +1,25 @@
-<!DOCTYPE html>
-<!--
- Copyright 2011 Google Inc. All Rights Reserved.
+/* Copyright 2011 Google Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ *     You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *     See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * 
+ */
 
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
+goog.require('goog.testing.jsunit');
+goog.require('puppet.logging');
+goog.require('puppet.xpath');
+goog.require('wgxpath');
 
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
-
- 
--->
-<html>
-<head>
-<title>xpath_test.html</title>
-<script src="test_bootstrap.js"></script>
-<script type="text/javascript">
-  goog.require('goog.testing.jsunit');
-  goog.require('puppet.logging');
-  goog.require('puppet.xpath');
-  goog.require('wgxpath');
-</script>
-<body></body>
-
-<script type="text/javascript">
 function setUpPage() {
   // Generate the initial html page for testing.
   // <html><body>
@@ -136,27 +127,29 @@ function testMultiIframeContentXPathResolveRaisesError() {
 }
 
 function testIdXpath() {
-  var xpath = xid();
+  var xpath = /** @type function(?string=, string=) : string*/(xid)();
   assertEquals('//*[@id]', xpath);
 }
 
 function testIdWithValueXpath() {
-  var xpath = xid('He-Man');
+  var xpath = (/** @type function(?string=, string=) : string*/(xid))('He-Man');
   assertEquals('//*[@id="He-Man"]', xpath);
 }
 
 function testIdWithContextXpath() {
-  var xpath = xid(null, '//dd');
+  var xpath = (/** @type function(?string=, string=) : string*/(xid)
+    (null, '//dd'));
   assertEquals('//dd[@id]', xpath);
 }
 
 function testTextWithContextXpath() {
-  var xpath = xtext('Zodiac', '/table//tr/td');
+  var xpath = (/** @type function(?string=, string=) : string*/(xtext)
+    ('Zodiac', '/table//tr/td'));
   assertEquals('/table//tr/td[text()="Zodiac"]', xpath);
 }
 
 function testClassWithEmptyStringValue() {
-  var xpath = xclass('');
+  var xpath = (/** @type function(?string=, string=) : string*/(xclass))('');
   assertEquals('//*[@class=""]', xpath);
 }
 
@@ -284,5 +277,3 @@ function testAtXpathResolve() {
   path = at('somePath', -2);
   assertEquals('(somePath)[last()-1]', path);
 }
-</script>
-</html>

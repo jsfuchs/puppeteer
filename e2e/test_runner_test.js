@@ -2,8 +2,10 @@
  * Tests the test runner and fixture functions.
  */
 
-var setUpPageCalls = 0, setUpCalls = 0,
-    tearDownCalls = 0, tearDownPageCalls = 0;
+var setUpPageCalls = 0;
+var setUpCalls = 0;
+var tearDownCalls = 0;
+var tearDownPageCalls = 0;
 
 function setUpPage() {
   run(assertEq, 0, setUpPageCalls);

@@ -81,19 +81,19 @@ function openAndExpectFail(relativeUrl, opt_reportValidator) {
 
   // Return whether the test failed, closing the window if it has.
   function hasTestFailed() {
-    if (!(win.puppet && win.puppet.getStatus && win.puppet.TestStatus &&
-        win.G_testRunner.getReport)) {
+    if (!(win['puppet'] && win['puppet']['getStatus'] &&
+        win['puppet']['TestStatus'] && win['G_testRunner']['getReport'])) {
       return false;
     }
-    var status = win.puppet.getStatus();
+    var status = win['puppet']['getStatus']();
     puppet.debug('Test should fail but has status: ' + status);
-    assert(status != win.puppet.TestStatus.PASSED);
-    var success = (status == win.puppet.TestStatus.FAILED);
+    assert(status != win['puppet']['TestStatus']['PASSED']);
+    var success = (status == win['puppet']['TestStatus']['FAILED']);
     if (success && opt_reportValidator) {
-      puppet.debug('The test report: ' + win.G_testRunner.getReport() +
+      puppet.debug('The test report: ' + win['G_testRunner']['getReport']() +
           ' did not match the expectation (' + opt_reportValidator + ')');
       success = success &&
-          opt_reportValidator.test(win.G_testRunner.getReport());
+          opt_reportValidator.test(win['G_testRunner']['getReport']());
     }
     if (success) {
       win.close();
