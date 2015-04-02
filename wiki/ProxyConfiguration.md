@@ -3,13 +3,13 @@
 Ideally, if you have access to the web server that hosts the web application you'd like to test, you can simply upload your Web Puppeteer tests (html files) to the same web server and run the tests directly on the client's browser (as shown in the figure below).
 Congratulation, you don't need a proxy in this scenario. An example configuration of your scenario can be found in QuickStart.
 
-<img src='http://puppeteer.googlecode.com/svn/wiki/image/architecture_simple.png' width='400'>
+<img src='architecture_simple.png' width='400'>
 
 
 <h3>2. Running Web Puppeteer tests via a proxy server</h3>
 If you are unable to host your Web Puppeteer tests on the testing web server, you will need to setup a proxy server to overcome the limitations of JavaScript cross-domain communications. For example, your testing environment might looks like:<br>
 <br>
-<img src='http://puppeteer.googlecode.com/svn/wiki/image/architecture_proxy.png' width='400'>
+<img src='architecture_proxy.png' width='400'>
 
 You can follow the steps below to setup a proxy using Apache2 (on Ubuntu).<br>
 <br>
