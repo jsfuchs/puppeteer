@@ -1,5 +1,5 @@
 /**
- * Test the stop function makes the test pass.
+ * Test that the stop function makes the test pass.
  */
 
 function testStop() {
