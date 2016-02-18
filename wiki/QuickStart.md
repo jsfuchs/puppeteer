@@ -14,11 +14,11 @@ Consider the scenario that there is a web server which hosts some web applicatio
 ## 1. Install puppeteer ##
 Download and install puppeteer to /var/www/puppeteer/ .
 
-```
-cd /tmp/ 
-svn checkout http://puppeteer.googlecode.com/svn/trunk/ puppeteer-read-only
+```bash
+cd /tmp/
+git clone https://github.com/google/puppeteer.git
 mkdir /var/www/puppeteer
-cp /tmp/puppeteer-read-only/* /var/www/puppeteer/ -R
+cp /tmp/puppeteer/* /var/www/puppeteer/ -R
 chmod 755 /var/www/puppeteer -R
 ```
 
@@ -28,23 +28,23 @@ Note that to run a puppeteer test, you only need the files directly under puppet
 ## 2. Validate the installation ##
 Now let's write a trivial puppeteer test to verify if puppeteer is installed successfully.
 
-```
+```bash
 touch /var/www/puppeteer/helloPuppeteer.html
 chmod 755 /var/www/puppeteer/helloPuppeteer.html
 vi /var/www/puppeteer/helloPuppeteer.html
 ```
 
-```
+```html
 <script src="./puppet.js"></script>
 
 <script>
 /**
  * My first Web Puppeteer test.
  */
-window.onload = function() { 
+window.onload = function() {
   run(load, '/webApp/');
 };
 </script>
 ```
 
-Open the test on your browser (http://localhost/puppeteer/helloPuppeteer.html) and you should see Web Puppeteer running.
+Open the test on your browser ([http://localhost/puppeteer/helloPuppeteer.html](http://localhost/puppeteer/helloPuppeteer.html)) and you should see Web Puppeteer running.
