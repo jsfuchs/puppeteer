@@ -327,7 +327,7 @@ puppet.buildMenu_ = function() {
   var docItem = {
     text: 'doc',
     title: 'Open the Puppet documentation.',
-    href: 'javascript:window.open(\'http://code.google.com/p/puppeteer\')'};
+    href: 'javascript:window.open(\'https://github.com/google/puppeteer\')'};
   var pauseItem = {
     text: 'pause',
     title: 'Pause execution and wait for stepping',

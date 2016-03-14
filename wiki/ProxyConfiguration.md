@@ -1,7 +1,7 @@
 # Introduction #
 ### 1. Hosting Web Puppeteer tests directly on the testing web server ###
 Ideally, if you have access to the web server that hosts the web application you'd like to test, you can simply upload your Web Puppeteer tests (html files) to the same web server and run the tests directly on the client's browser (as shown in the figure below).
-Congratulation, you don't need a proxy in this scenario. An example configuration of your scenario can be found in QuickStart.
+Congratulation, you don't need a proxy in this scenario. An example configuration of your scenario can be found in <a href='https://github.com/google/puppeteer/blob/master/wiki/QuickStart.md'>QuickStart</a>.
 
 <img src='architecture_simple.png' width='400'>
 
@@ -64,9 +64,9 @@ sudo ln -s ../mods-available/proxy_* ./<br>
 
 <h4>5. Install Web Puppeteer</h4>
 <pre><code>cd /tmp/ <br>
-svn checkout http://puppeteer.googlecode.com/svn/trunk/ puppeteer-read-only<br>
+git clone https://github.com/google/puppeteer.git<br>
 mkdir /var/www/puppeteer<br>
-cp /tmp/puppeteer-read-only/* /var/www/puppeteer/ -R<br>
+cp /tmp/puppeteer/* /var/www/puppeteer/ -R<br>
 chmod 755 /var/www/puppeteer -R<br>
 </code></pre>
 
