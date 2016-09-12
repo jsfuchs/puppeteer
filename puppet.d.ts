@@ -670,6 +670,12 @@ declare module puppet {
     function initWindow(): void;
 
     /**
+     * Resumes puppet's initialization process. Only useful for waiting on asynchronous javasript to load, e.g. require.js,
+     * commonjs, etc. You must set the data-deferred attribute in puppets <script> tag to "true" in order for this to work.
+     */
+    function beginDeferredExecution(): void;
+
+    /**
      * Makes an asynchronous call to a Javascript file. The evaluation of
      * that Javascript may complete after this function returns.
      *

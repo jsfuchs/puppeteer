@@ -387,6 +387,7 @@ puppet.exportSymbol('puppet.mouse', puppet.mouse);
 puppet.exportSymbol('puppet.request', puppet.request);
 puppet.exportSymbol('puppet.resizeHeight', puppet.resizeHeight);
 puppet.exportSymbol('puppet.resizeWidth', puppet.resizeWidth);
+puppet.exportSymbol('puppet.beginDeferredExecution', puppet.beginDeferredExecution);
 puppet.exportSymbol('puppet.setCommandTimeoutSecs',
                     puppet.setCommandTimeoutSecs);
 puppet.exportSymbol('puppet.setDelayMs', puppet.setDelayMs);

@@ -48,6 +48,32 @@ function createElement(tagName) {
  */
 var POPUPS_BROKEN = puppet.userAgent.isOpera();
 
+/**
+ * Return whether the test failed, closing the window if it has.
+ * @param {!Window} win Window where the test is running
+ * @param {!RegExp=} opt_reportValidator A regex to validate against the test
+ *     report.
+ */
+function hasTestFailed(win, opt_reportValidator) {
+  if (!(win['puppet'] && win['puppet']['getStatus'] &&
+      win['puppet']['TestStatus'] && win['G_testRunner']['getReport'])) {
+    return false;
+  }
+  var status = win['puppet']['getStatus']();
+  puppet.debug('Test should fail but has status: ' + status);
+  assert(status != win['puppet']['TestStatus']['PASSED']);
+  var success = (status == win['puppet']['TestStatus']['FAILED']);
+  if (success && opt_reportValidator) {
+    puppet.debug('The test report: ' + win['G_testRunner']['getReport']() +
+        ' did not match the expectation (' + opt_reportValidator + ')');
+    success = success &&
+        opt_reportValidator.test(win['G_testRunner']['getReport']());
+  }
+  if (success) {
+    win.close();
+  }
+  return success;
+}
 
 /**
  * Loads a Puppet test within the Puppet test and waits for it to fail.

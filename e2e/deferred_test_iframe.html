@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<title>deferred execution test</title>
+<script src=../puppet.js data-deferred="true"></script>
+<script>
+    /**
+     * This test is loaded dynamically and expected to fail.
+     */
+    function testAssertFail() {
+        run(assert, false);
+    }
+</script>
