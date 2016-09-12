@@ -2938,6 +2938,12 @@ puppet.initWindow = function() {
 };
 
 /**
+ * Variable to store if we will defer puppet's initialization in order to wait for asynchronous javascript to load.
+ * @private {boolean}
+ */
+puppet.deferred_ = false;
+
+/**
  * Sets up Puppet's global state.
  *
  * @private
@@ -2951,7 +2957,15 @@ puppet.setup_ = function() {
         ' use ?cmds instead.');
   }
 
-  puppet.addOnLoad_(window, puppet.initialize_);
+  // Specify data-deferred to a truthy value on puppet's <script> tag to have this work test code
+  // that is loaded in asynchronously, for example, via commonjs or asynchronous module definition.
+  if (document.currentScript.dataset.deferred) {
+    // The test script will be responsible for kicking off puppet via puppet.beginDeferredExecution()
+    puppet.deferred_ = true;
+  } else {
+    puppet.addOnLoad_(window, puppet.initialize_);
+  }
+
   goog.events.listen(document, goog.events.EventType.KEYDOWN, function(event) {
     var target = event.target;
 
@@ -2993,6 +3007,23 @@ puppet.setup_ = function() {
       throw message;  // Rethrow the same exception.
     };
   }
+};
+
+/**
+ * Resumes puppet's initialization process. Only useful for waiting on asynchronous javasript to load, e.g. require.js,
+ * commonjs, etc. You must set the data-deferred attribute in puppets <script> tag to "true" in order for this to work.
+ */
+puppet.beginDeferredExecution = function() {
+  // If we didn't start up deferred, then calling this function is an error!
+  if (!puppet.deferred_) {
+    var message = 'Do not call puppet.resume() if you did not defer puppet\'s initialization! ' +
+        'Please set data-deferred=true in the puppet \<script\> tag ' +
+        'in order to wait for asynchronous javascript to load';
+    puppet.done_(message);
+    throw message;
+  }
+
+  puppet.initialize_();
 };
 
 /**
